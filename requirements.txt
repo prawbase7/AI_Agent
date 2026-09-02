@@ -1,5 +1,9 @@
-yfinance
-requests
-python-dotenv
-Flask
-gunicorn
+# Runtime dependencies. Bounds keep builds reproducible without freezing
+# on a single patch. Regenerate a lockfile later if needed.
+
+yfinance>=1.7,<2
+requests>=2.32,<3
+python-dotenv>=1.0,<2
+pandas>=2.2,<4
+Flask>=3.1,<4
+gunicorn>=23,<27
