@@ -513,10 +513,23 @@
       });
     }
 
-    fetch("/api/analysis")
-      .then(function (r) { return r.json(); })
-      .then(renderRead)
-      .catch(function () { renderRead({ status: "unavailable" }); });
+    // the analysis generates on first request (~15s) and can transiently fail
+    // on the model's free tier — poll a few times before giving up.
+    (function loadRead(tries) {
+      fetch("/api/analysis")
+        .then(function (r) { return r.json(); })
+        .then(function (a) {
+          if ((!a || a.status === "unavailable") && tries > 0) {
+            setTimeout(function () { loadRead(tries - 1); }, 6000);
+            return;
+          }
+          renderRead(a);
+        })
+        .catch(function () {
+          if (tries > 0) setTimeout(function () { loadRead(tries - 1); }, 6000);
+          else renderRead({ status: "unavailable" });
+        });
+    })(4);
 
     // ---- chat ----
     var chat = document.getElementById("chat");

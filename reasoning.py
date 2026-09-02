@@ -12,6 +12,7 @@ fails, `analyze_market()` returns None and the page renders without analysis.
 
 import os
 import logging
+import time
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
@@ -23,7 +24,8 @@ logging.getLogger("google_genai").setLevel(logging.ERROR)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
 # tried if the primary model is briefly unavailable (free tier 503s under load)
-GEMINI_FALLBACK_MODEL = os.environ.get("GEMINI_FALLBACK_MODEL", "gemini-flash-latest")
+GEMINI_FALLBACK_MODEL = os.environ.get("GEMINI_FALLBACK_MODEL", "gemini-3-flash-preview")
+_ATTEMPTS_PER_MODEL = 2  # quick retries before moving to the fallback model
 
 # JSON shape we ask the model to return. Kept in sync with the template.
 _SCHEMA = {
@@ -170,17 +172,23 @@ def analyze_market(snapshot: dict, model: str = None):
     prompt = f"{context}\n\nProduce the desk note as JSON."
 
     resp = None
+    used_model = None
     for candidate in ([model] if model else [GEMINI_MODEL, GEMINI_FALLBACK_MODEL]):
-        try:
-            resp = _client().models.generate_content(
-                model=candidate, contents=prompt, config=config,
-            )
+        for attempt in range(_ATTEMPTS_PER_MODEL):
+            try:
+                resp = _client().models.generate_content(
+                    model=candidate, contents=prompt, config=config,
+                )
+                used_model = candidate
+                break
+            except Exception as e:  # noqa: BLE001 — analysis is best-effort
+                print(f"⚠️  Market analysis via {candidate} "
+                      f"(attempt {attempt + 1}) failed: {e}")
+                time.sleep(1.5 * (attempt + 1))
+        if resp is not None:
             break
-        except Exception as e:  # noqa: BLE001 — analysis is best-effort
-            print(f"⚠️  Market analysis via {candidate} failed: {e}")
     if resp is None:
         return None
-    used_model = candidate
 
     import json
 
