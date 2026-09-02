@@ -15,6 +15,7 @@ Setup:
 """
 
 import os
+import pandas as pd
 import yfinance as yf
 import requests
 from datetime import datetime, timedelta
@@ -28,30 +29,53 @@ NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "")  # set in .env or your environme
 NEWS_LOOKBACK_DAYS = 3
 
 
-def get_price_data(ticker: str, period: str = "1mo"):
-    """Fetch recent price history + basic info for a ticker."""
+def get_price_data(ticker: str, period: str = "1y"):
+    """Fetch recent price history + basic stats for a ticker.
+
+    Everything shown comes from the price-history endpoint, which stays reliable
+    from cloud servers. `stock.info` (sector, market cap) is attempted too but
+    Yahoo rate-limits it from hosted IPs, so treat those fields as best-effort.
+    """
     stock = yf.Ticker(ticker)
     history = stock.history(period=period)
+
+    if history.empty:
+        return {
+            "ticker": ticker,
+            "latest_close": None,
+            "pct_change_1d": None,
+            "52w_high": None,
+            "52w_low": None,
+            "market_cap": None,
+            "sector": None,
+            "history": history,
+        }
+
+    closes = history["Close"]
+    latest_close = closes.iloc[-1]
+    prev_close = closes.iloc[-2] if len(closes) > 1 else None
+    pct_change = (
+        ((latest_close - prev_close) / prev_close * 100) if prev_close else None
+    )
+
+    # 52-week range straight from the last year of prices
+    cutoff = history.index.max() - pd.Timedelta(days=365)
+    last_year = history[history.index >= cutoff]
+    week52_high = last_year["High"].max()
+    week52_low = last_year["Low"].min()
+
     try:
-        info = stock.info  # company fundamentals/summary (can be slow / rate-limited)
+        info = stock.info
     except Exception as e:
         print(f"⚠️  Could not fetch info for {ticker}: {e}")
         info = {}
 
-    latest_close = history["Close"].iloc[-1] if not history.empty else None
-    prev_close = history["Close"].iloc[-2] if len(history) > 1 else None
-    pct_change = (
-        ((latest_close - prev_close) / prev_close * 100)
-        if latest_close is not None and prev_close
-        else None
-    )
-
     return {
         "ticker": ticker,
-        "latest_close": round(latest_close, 2) if latest_close else None,
-        "pct_change_1d": round(pct_change, 2) if pct_change is not None else None,
-        "52w_high": info.get("fiftyTwoWeekHigh"),
-        "52w_low": info.get("fiftyTwoWeekLow"),
+        "latest_close": round(float(latest_close), 2),
+        "pct_change_1d": round(float(pct_change), 2) if pct_change is not None else None,
+        "52w_high": round(float(week52_high), 2),
+        "52w_low": round(float(week52_low), 2),
         "market_cap": info.get("marketCap"),
         "sector": info.get("sector"),
         "history": history,  # full dataframe if you need it downstream
