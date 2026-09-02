@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Research Agent — Market Snapshot</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #0f1115;
+      --card: #191c22;
+      --border: #2a2e37;
+      --text: #e6e8eb;
+      --muted: #9aa0ab;
+      --up: #3fb950;
+      --down: #f85149;
+      --link: #58a6ff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 2rem 1rem 4rem;
+      background: var(--bg);
+      color: var(--text);
+      font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .wrap { max-width: 780px; margin: 0 auto; }
+    header { margin-bottom: 1.5rem; }
+    h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+    .meta { color: var(--muted); font-size: .85rem; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.1rem 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+    .ticker { font-size: 1.15rem; font-weight: 700; }
+    .sector { color: var(--muted); font-size: .85rem; }
+    .price-row { margin: .6rem 0 .2rem; font-size: 1.05rem; }
+    .price { font-weight: 600; }
+    .up { color: var(--up); }
+    .down { color: var(--down); }
+    .stats { color: var(--muted); font-size: .85rem; margin-top: .3rem; }
+    .news { margin-top: .9rem; border-top: 1px solid var(--border); padding-top: .75rem; }
+    .news h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 .5rem; }
+    .news ul { margin: 0; padding: 0; list-style: none; }
+    .news li { margin-bottom: .5rem; font-size: .9rem; }
+    .news a { color: var(--link); text-decoration: none; }
+    .news a:hover { text-decoration: underline; }
+    .news .src { color: var(--muted); font-size: .8rem; }
+    .note { color: var(--muted); font-size: .85rem; margin-top: 1.5rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>AI Research Agent — Market Snapshot</h1>
+      <div class="meta">
+        Data fetched {{ fetched_at.strftime("%Y-%m-%d %H:%M:%S") }} ·
+        cached for {{ cache_ttl_min }} min · reload to refresh
+      </div>
+    </header>
+
+    {% for ticker, d in data.items() %}
+      {% set p = d.price %}
+      <div class="card">
+        <div class="card-head">
+          <span class="ticker">{{ ticker }}</span>
+          <span class="sector">{{ p.sector or "—" }}</span>
+        </div>
+
+        <div class="price-row">
+          <span class="price">
+            {% if p.latest_close is not none %}${{ "%.2f"|format(p.latest_close) }}{% else %}—{% endif %}
+          </span>
+          {% if p.pct_change_1d is not none %}
+            <span class="{{ 'up' if p.pct_change_1d >= 0 else 'down' }}">
+              {{ "+" if p.pct_change_1d >= 0 else "" }}{{ p.pct_change_1d }}% (1d)
+            </span>
+          {% endif %}
+        </div>
+
+        <div class="stats">
+          52w range:
+          {% if p["52w_low"] and p["52w_high"] %}
+            ${{ "%.2f"|format(p["52w_low"]) }} – ${{ "%.2f"|format(p["52w_high"]) }}
+          {% else %}—{% endif %}
+          {% if p.market_cap %} · mkt cap: ${{ "{:,}".format(p.market_cap) }}{% endif %}
+        </div>
+
+        <div class="news">
+          <h3>Recent news ({{ d.news|length }})</h3>
+          {% if d.news %}
+            <ul>
+              {% for a in d.news[:5] %}
+                <li>
+                  <a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.title }}</a>
+                  <span class="src">— {{ a.source }}</span>
+                </li>
+              {% endfor %}
+            </ul>
+          {% elif not news_enabled %}
+            <div class="src">NEWSAPI_KEY not set — news disabled.</div>
+          {% else %}
+            <div class="src">No recent articles (or NewsAPI blocked this request).</div>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+
+    <div class="note">
+      Prices via yfinance. News via NewsAPI (free plan works from localhost only —
+      expect it to be empty once deployed). Not investment advice.
+    </div>
+  </div>
+</body>
+</html>
