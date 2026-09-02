@@ -155,7 +155,7 @@ def _get_news_alpaca(ticker, lookback_days, limit, start=None, end=None):
     return [
         {
             "title": a["headline"],
-            "source": a.get("source") or "Alpaca",
+            "source": (a.get("source") or "Alpaca").title(),
             "published_at": a.get("updated_at") or a.get("created_at"),
             "url": a.get("url"),
             "description": a.get("summary"),
