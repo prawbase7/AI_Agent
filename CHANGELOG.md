@@ -7,6 +7,24 @@ This project is pre-1.0; the API and schema may change between entries.
 ## [Unreleased]
 - Phase 2 finish: confidence calibration tracking, per-call usage logging.
 
+## [0.2.1] — 2026-09-02
+
+### Changed
+- Per-company analysis is now a plain-English walk-through: *what happened → why
+  → what it could change → what the stock did today → what to expect next*, with
+  a one-line headline read (replaces the old factors/risks/catalysts lists).
+- Chat rewritten: conversational system prompt, Markdown rendering, model
+  fallback, robust SSE parsing (fixes the "types but never answers" case).
+- Analysis now runs on a **background thread** — the page and `/api/analysis`
+  never block on the model; stale briefing is served while a new one builds.
+- Analysis rebuilds only when the **news/price fingerprint changes** (or every
+  30 min), instead of on a fixed timer — keeps within the model's free-tier
+  daily quota while still reacting immediately to real news.
+- Default model → `gemini-3.1-flash-lite` (the full `flash` models are capped at
+  ~20 requests/day on the free tier; flash-lite's quota is far higher).
+- Data re-scan interval 5 min → 2 min. Gunicorn runs with `--threads 8` so
+  requests aren't serialised behind a slow model call.
+
 ## [0.2.0] — 2026-09-02
 
 Phase 2 — reasoning layer and chat.

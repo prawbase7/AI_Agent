@@ -105,7 +105,7 @@ python data_sources.py
 |----------|-----------|-----------------|
 | `ALPACA_API_KEY_ID` / `ALPACA_API_SECRET_KEY` | News (preferred), and phase 4 paper trading | [app.alpaca.markets](https://app.alpaca.markets) → enable MFA → **API** → Generate. Use **Paper Trading** keys. |
 | `NEWSAPI_KEY` | News fallback only | [newsapi.org/register](https://newsapi.org/register) (free tier) |
-| `GEMINI_API_KEY` | Market read + chat | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) — free tier, no card, 1,500 req/day |
+| `GEMINI_API_KEY` | Market read + chat | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) — free tier, no card (default model is `flash-lite`; the full `flash` models allow only ~20 calls/day free) |
 
 The app runs without any keys — prices always work; news needs Alpaca or NewsAPI;
 the analysis and chat need Gemini. `.env` is gitignored; never commit real keys.

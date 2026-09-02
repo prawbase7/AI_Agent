@@ -130,6 +130,7 @@
       margin-bottom: .8rem;
     }
     .read-card .summary { font-size: 1.02rem; line-height: 1.6; }
+    .read-stamp { font-family: var(--mono); font-size: .64rem; color: var(--dim); margin-top: .5rem; letter-spacing: .05em; }
     .themes { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: 1rem; }
     .theme {
       font-family: var(--mono); font-size: .72rem;
@@ -216,15 +217,13 @@
     .conf-bar { height: 5px; border-radius: 999px; background: rgba(139,147,167,.2); overflow: hidden; }
     .conf-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), var(--cyan)); }
     .conf-label { font-family: var(--mono); font-size: .64rem; color: var(--dim); margin-top: .25rem; letter-spacing: .05em; }
-    .tread .rationale { font-size: .92rem; color: var(--text); }
-    .tread .cols { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem 1.2rem; margin-top: .7rem; }
-    .tread .cols h4 {
+    .tread .lede { font-size: .96rem; font-weight: 500; color: var(--text); margin-bottom: .8rem; }
+    .tread .block { margin-top: .75rem; }
+    .tread .block h4 {
       font-family: var(--mono); font-size: .6rem; letter-spacing: .14em; text-transform: uppercase;
-      color: var(--dim); margin: 0 0 .3rem;
+      color: var(--cyan); margin: 0 0 .25rem;
     }
-    .tread .cols ul { margin: 0; padding-left: 1rem; }
-    .tread .cols li { font-size: .82rem; color: var(--muted); margin-bottom: .2rem; }
-    @media (max-width: 480px) { .tread .cols { grid-template-columns: 1fr; } }
+    .tread .block p { margin: 0; font-size: .88rem; color: var(--muted); line-height: 1.55; }
 
     .news { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border); }
     .news-head {
@@ -279,11 +278,17 @@
     .chat-head .t { font-family: var(--mono); font-size: .74rem; letter-spacing: .14em; text-transform: uppercase; color: var(--cyan); }
     .chat-head button { background: none; border: none; color: var(--muted); font-size: 1.2rem; cursor: pointer; line-height: 1; }
     .chat-log { flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: .8rem; }
-    .msg { font-size: .9rem; line-height: 1.5; white-space: pre-wrap; }
-    .msg.user { align-self: flex-end; max-width: 85%; padding: .55rem .8rem; border-radius: 12px 12px 3px 12px; background: rgba(108,140,255,.16); border: 1px solid rgba(108,140,255,.3); }
-    .msg.bot { align-self: flex-start; max-width: 92%; color: var(--text); }
+    .msg { font-size: .9rem; line-height: 1.55; }
+    .msg.user { align-self: flex-end; max-width: 85%; padding: .55rem .8rem; border-radius: 12px 12px 3px 12px; background: rgba(108,140,255,.16); border: 1px solid rgba(108,140,255,.3); white-space: pre-wrap; }
+    .msg.bot { align-self: flex-start; max-width: 94%; color: var(--text); }
     .msg.bot.pending::after { content: "▍"; animation: shimmer 1s infinite; }
-    .msg .who { font-family: var(--mono); font-size: .58rem; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); display: block; margin-bottom: .2rem; }
+    .msg .who { font-family: var(--mono); font-size: .58rem; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); display: block; margin-bottom: .25rem; }
+    .msg.bot p { margin: 0 0 .5rem; }
+    .msg.bot p:last-child { margin-bottom: 0; }
+    .msg.bot ul { margin: .3rem 0 .5rem; padding-left: 1.1rem; }
+    .msg.bot li { margin-bottom: .2rem; }
+    .msg.bot strong { color: #fff; }
+    .msg.bot code { font-family: var(--mono); font-size: .82rem; background: rgba(255,255,255,.07); padding: .05rem .3rem; border-radius: 4px; }
     .chat-hint { font-family: var(--mono); font-size: .72rem; color: var(--dim); padding: 0 1rem .4rem; }
     .chat-form { display: flex; gap: .5rem; padding: .8rem 1rem 1rem; border-top: 1px solid var(--border); }
     .chat-form input {
@@ -319,7 +324,8 @@
       <h1>AI Research Agent</h1>
       <div class="meta">
         SNAPSHOT <b>{{ fetched_at.strftime("%Y-%m-%d %H:%M:%S UTC") }}</b>
-        &nbsp;·&nbsp; auto-refresh in <b id="countdown">{{ "%d:%02d"|format(next_refresh // 60, next_refresh % 60) }}</b>
+        &nbsp;·&nbsp; re-scans every {{ (refresh_secs / 60)|round(1) }} min, analysis rebuilds on new news
+        &nbsp;·&nbsp; next scan <b id="countdown">{{ "%d:%02d"|format(next_refresh // 60, next_refresh % 60) }}</b>
       </div>
     </header>
 
@@ -413,8 +419,7 @@
     <footer>
       <span class="tag">PRICE</span> yfinance &nbsp;·&nbsp;
       <span class="tag">NEWS</span> Alpaca → NewsAPI &nbsp;·&nbsp;
-      <span class="tag">READ</span> Gemini &nbsp;·&nbsp;
-      <span class="tag">CACHE</span> {{ cache_ttl_min }}m<br>
+      <span class="tag">READ</span> Gemini<br>
       Analysis is AI-generated and may be wrong. Not investment advice.
     </footer>
   </div>
@@ -462,13 +467,18 @@
       var body = document.getElementById("read-body");
       if (!a || a.status !== "ok") {
         body.classList.remove("skeleton");
-        body.innerHTML = '<div class="empty" style="font-family:var(--mono);color:var(--dim);font-size:.8rem">'
-          + (a && a.status === "unavailable" ? "// analysis temporarily unavailable" : "// analysis disabled")
-          + "</div>";
+        var note = a && a.status === "pending"
+          ? "// building analysis from the latest news…"
+          : a && a.status === "unavailable"
+          ? "// analysis temporarily unavailable — retrying"
+          : "// analysis disabled";
+        body.innerHTML = '<div class="empty" style="font-family:var(--mono);color:var(--dim);font-size:.8rem">' + note + "</div>";
         return;
       }
       body.classList.remove("skeleton");
+      var when = a.generated_at ? String(a.generated_at).slice(11, 16) + " UTC" : "";
       var html = '<div class="summary">' + esc(a.market_summary) + "</div>";
+      if (when) html += '<div class="read-stamp">updated ' + when + (a.model ? " · " + esc(a.model) : "") + "</div>";
       if (a.themes && a.themes.length) {
         html += '<div class="themes">' + a.themes.map(function (t) {
           return '<span class="theme" title="' + esc(t.description)
@@ -487,15 +497,16 @@
       }
       body.innerHTML = html;
 
-      // distribute per-ticker reads
+      // distribute the per-company walk-through into each ticker card
       (a.tickers || []).forEach(function (t) {
         var card = document.querySelector('.card[data-ticker="' + t.ticker + '"]');
         if (!card) return;
         var slot = card.querySelector("[data-read]");
         if (!slot) return;
         var pct = Math.round((t.confidence || 0) * 100);
-        var list = function (items) {
-          return (items || []).slice(0, 4).map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("");
+        var block = function (label, text) {
+          if (!text) return "";
+          return '<div class="block"><h4>' + label + "</h4><p>" + esc(text) + "</p></div>";
         };
         slot.innerHTML =
           '<div class="tread-head">'
@@ -503,33 +514,30 @@
           + '<span class="conf"><span class="conf-bar"><span class="conf-fill" style="width:' + pct + '%"></span></span>'
           + '<span class="conf-label">confidence ' + pct + "%</span></span>"
           + "</div>"
-          + '<div class="rationale">' + esc(t.rationale) + "</div>"
-          + '<div class="cols">'
-          + "<div><h4>Key factors</h4><ul>" + list(t.key_factors) + "</ul></div>"
-          + "<div><h4>Risks</h4><ul>" + list(t.risks) + "</ul></div>"
-          + "<div><h4>Catalysts</h4><ul>" + list(t.catalysts) + "</ul></div>"
-          + "</div>";
+          + (t.headline_read ? '<div class="lede">' + esc(t.headline_read) + "</div>" : "")
+          + block("Recent news — what happened", t.what_happened)
+          + block("Why it happened", t.why_it_happened)
+          + block("What it could change", t.what_could_change)
+          + block("What the stock did today", t.todays_move)
+          + block("What to expect next", t.expected_outcome);
         slot.hidden = false;
       });
     }
 
-    // the analysis generates on first request (~15s) and can transiently fail
-    // on the model's free tier — poll a few times before giving up.
+    // the analysis builds on a background thread; poll until it's ready.
     (function loadRead(tries) {
       fetch("/api/analysis")
         .then(function (r) { return r.json(); })
         .then(function (a) {
-          if ((!a || a.status === "unavailable") && tries > 0) {
-            setTimeout(function () { loadRead(tries - 1); }, 6000);
-            return;
-          }
-          renderRead(a);
+          if (a && a.status === "ok") { renderRead(a); return; }
+          renderRead(a);  // shows "building…" / "retrying" note
+          if (tries > 0) setTimeout(function () { loadRead(tries - 1); }, 5000);
         })
         .catch(function () {
-          if (tries > 0) setTimeout(function () { loadRead(tries - 1); }, 6000);
+          if (tries > 0) setTimeout(function () { loadRead(tries - 1); }, 5000);
           else renderRead({ status: "unavailable" });
         });
-    })(4);
+    })(30);
 
     // ---- chat ----
     var chat = document.getElementById("chat");
@@ -544,13 +552,40 @@
     openBtn.addEventListener("click", function () { chat.hidden = false; openBtn.hidden = true; input.focus(); });
     closeBtn.addEventListener("click", function () { chat.hidden = true; openBtn.hidden = false; });
 
+    // tiny, safe Markdown: escape first, then apply a few inline/block rules
+    function md(src) {
+      var out = esc(src)
+        .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+        .replace(/`([^`]+)`/g, "<code>$1</code>");
+      var lines = out.split("\n");
+      var html = "", inList = false;
+      lines.forEach(function (ln) {
+        var t = ln.trim();
+        if (/^[-*]\s+/.test(t)) {
+          if (!inList) { html += "<ul>"; inList = true; }
+          html += "<li>" + t.replace(/^[-*]\s+/, "") + "</li>";
+        } else {
+          if (inList) { html += "</ul>"; inList = false; }
+          if (t) html += "<p>" + t + "</p>";
+        }
+      });
+      if (inList) html += "</ul>";
+      return html;
+    }
+
     function addMsg(role, text) {
       var d = document.createElement("div");
       d.className = "msg " + (role === "user" ? "user" : "bot");
-      d.innerHTML = '<span class="who">' + (role === "user" ? "You" : "Desk") + "</span>" + esc(text);
+      d.innerHTML = '<span class="who">' + (role === "user" ? "You" : "Desk") + "</span>"
+        + (role === "user" ? esc(text) : md(text));
       log.appendChild(d);
       log.scrollTop = log.scrollHeight;
       return d;
+    }
+
+    function setBot(el, text) {
+      el.innerHTML = '<span class="who">Desk</span>' + md(text);
+      log.scrollTop = log.scrollHeight;
     }
 
     form.addEventListener("submit", function (e) {
@@ -566,11 +601,36 @@
       bot.classList.add("pending");
       var acc = "";
 
+      function handleLine(line) {
+        line = line.replace(/^data:\s?/, "");
+        if (!line || line === "[DONE]") return;
+        try {
+          var obj = JSON.parse(line);
+          if (obj.text) { acc += obj.text; setBot(bot, acc); }
+          else if (obj.error) { acc += "\n\n_(error: " + obj.error + ")_"; setBot(bot, acc); }
+        } catch (_) {}
+      }
+
+      function finish() {
+        bot.classList.remove("pending");
+        if (!acc) setBot(bot, "_(no response — try again)_");
+        history.push({ role: "assistant", content: acc });
+        send.disabled = false;
+        input.focus();
+      }
+
       fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: history }),
       }).then(function (res) {
+        if (!res.ok || !res.body) {
+          // no stream available — read the whole body then parse
+          return res.text().then(function (txt) {
+            txt.split(/\r?\n\r?\n/).forEach(handleLine);
+            finish();
+          });
+        }
         var reader = res.body.getReader();
         var dec = new TextDecoder();
         var buf = "";
@@ -578,31 +638,16 @@
           return reader.read().then(function (r) {
             if (r.done) { finish(); return; }
             buf += dec.decode(r.value, { stream: true });
-            var parts = buf.split("\n\n");
+            var parts = buf.split(/\r?\n\r?\n/);
             buf = parts.pop();
-            parts.forEach(function (block) {
-              var line = block.replace(/^data: /, "").trim();
-              if (!line || line === "[DONE]") return;
-              try {
-                var obj = JSON.parse(line);
-                if (obj.text) { acc += obj.text; bot.innerHTML = '<span class="who">Desk</span>' + esc(acc); }
-                else if (obj.error) { acc += "\n[error: " + obj.error + "]"; bot.innerHTML = '<span class="who">Desk</span>' + esc(acc); }
-              } catch (_) {}
-              log.scrollTop = log.scrollHeight;
-            });
+            parts.forEach(handleLine);
             return pump();
           });
-        }
-        function finish() {
-          bot.classList.remove("pending");
-          history.push({ role: "assistant", content: acc });
-          send.disabled = false;
-          input.focus();
         }
         return pump();
       }).catch(function (err) {
         bot.classList.remove("pending");
-        bot.innerHTML = '<span class="who">Desk</span>' + esc("Connection error: " + err.message);
+        setBot(bot, "Connection error: " + err.message);
         send.disabled = false;
       });
     });

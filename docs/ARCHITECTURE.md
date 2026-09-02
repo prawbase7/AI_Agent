@@ -92,13 +92,19 @@ current desk note as JSON, so answers stay grounded. Thinking off for latency.
 
 ## `app.py`
 
-- **Two caches**, both module-level dicts:
-  - price snapshot — `SNAPSHOT_TTL` (5 min)
-  - analysis — `ANALYSIS_TTL` (5 min), also invalidated whenever the snapshot it
-    was built from is replaced
+- **Two caches**, both module-level dicts guarded by locks:
+  - price snapshot — re-scanned every `SNAPSHOT_TTL` (2 min)
+  - analysis — rebuilt only when `news_fingerprint(snapshot)` changes (a hash of
+    all headlines + rounded prices) or it's older than `ANALYSIS_MAX_AGE`
+    (30 min). An unchanged watchlist costs **zero** model calls — this is what
+    keeps us inside the free-tier daily quota.
 - **The page never blocks on the model.** `/` renders from the price snapshot
-  only; the browser then calls `/api/analysis`, which generates the read on
-  first request and serves it cached after.
+  only. `/api/analysis` returns the cached briefing immediately and, if stale,
+  kicks off a **background thread** to rebuild it (`_regenerate_analysis`);
+  it returns `pending` only when nothing is cached yet. The browser polls until
+  `ok`.
+- Gunicorn runs `--threads 8` so a slow model call on one thread doesn't stall
+  page loads or chat on the others.
 - **View models** (`build_views`): pre-computed display data, never raw frames.
   - `_sparkline()` — last 30 closes → `"x,y ..."` for an SVG polyline.
   - `_range_position()` — latest close within the 52-week range, 0–100.

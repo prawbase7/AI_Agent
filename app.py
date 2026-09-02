@@ -2,64 +2,104 @@
 AI Research Agent - Web layer
 -----------------------------
 Serves the price + news snapshot from data_sources.py as a page, plus:
-  - GET  /api/analysis  -> the LLM market read (generated lazily, cached)
-  - POST /api/chat      -> streaming chat grounded in the snapshot + analysis
+  - GET  /api/analysis  -> the LLM market briefing (generated in the background)
+  - POST /api/chat      -> streaming chat grounded in the snapshot + briefing
 
-The page never blocks on the model: it renders prices immediately and the
-browser fetches the analysis afterward. Snapshot and analysis have separate
-in-memory caches.
+Nothing on the page blocks on the model. The price snapshot and the analysis
+have independent caches; the analysis regenerates on a background thread so a
+slow model call never holds up a request. Stale analysis is served while a
+fresh one is being built.
 
 Run locally:   python3 app.py          # http://localhost:8000
-Production:    gunicorn app:app
+Production:    gunicorn app:app --threads 8
 """
 
 import json
 import os
+import threading
 import time
 from datetime import datetime
 
 from flask import Flask, Response, render_template, request, stream_with_context
 
 from data_sources import build_snapshot, TICKERS
-from reasoning import analyze_market, chat_stream
+from reasoning import analyze_market, chat_stream, news_fingerprint
 
 app = Flask(__name__)
 
-SNAPSHOT_TTL = 300      # seconds — price + news
-ANALYSIS_TTL = 300      # seconds — LLM market read
+# How often to re-scan the data sources (seconds). The LLM briefing is only
+# rebuilt when the news/price fingerprint actually changes (see below), or once
+# ANALYSIS_MAX_AGE has passed — this keeps us inside the model's free-tier quota
+# while still reacting the moment there's real news.
+SNAPSHOT_TTL = int(os.environ.get("SNAPSHOT_TTL", 120))
+ANALYSIS_MAX_AGE = int(os.environ.get("ANALYSIS_MAX_AGE", 1800))
 
 _snap = {"data": None, "at": 0.0}
-_analysis = {"data": None, "at": 0.0, "snap_at": 0.0}
+_snap_lock = threading.Lock()
+
+_analysis = {
+    "data": None, "at": 0.0, "fingerprint": None, "generating": False,
+}
+_analysis_lock = threading.Lock()
 
 
 def get_snapshot():
     """Return (snapshot, fetched_at). Refreshes when stale."""
-    now = time.time()
-    if _snap["data"] is None or now - _snap["at"] > SNAPSHOT_TTL:
-        _snap["data"] = build_snapshot(TICKERS)
-        _snap["at"] = now
-    return _snap["data"], datetime.fromtimestamp(_snap["at"])
+    with _snap_lock:
+        now = time.time()
+        if _snap["data"] is None or now - _snap["at"] > SNAPSHOT_TTL:
+            _snap["data"] = build_snapshot(TICKERS)
+            _snap["at"] = now
+        return _snap["data"], datetime.fromtimestamp(_snap["at"])
 
 
-def get_analysis():
-    """Return the market read dict (or None). Regenerates when stale or when the
-    snapshot it was built from has been replaced."""
+def _regenerate_analysis(snapshot, fingerprint):
+    try:
+        result = analyze_market(snapshot)
+    except Exception as e:  # noqa: BLE001
+        print(f"⚠️  analysis thread error: {e}")
+        result = None
+    with _analysis_lock:
+        if result is not None:
+            _analysis["data"] = result
+            _analysis["at"] = time.time()
+            _analysis["fingerprint"] = fingerprint
+        _analysis["generating"] = False
+
+
+def get_analysis_state():
+    """('ok'|'pending'|'unavailable'|'disabled', data_or_None).
+
+    Serves the cached briefing immediately. Kicks off a background rebuild only
+    when the news/price fingerprint has changed or the briefing is older than
+    ANALYSIS_MAX_AGE — so an unchanged watchlist costs zero model calls.
+    """
+    if not os.environ.get("GEMINI_API_KEY"):
+        return "disabled", None
+
     data, _ = get_snapshot()
+    fp = news_fingerprint(data)
     now = time.time()
-    fresh = (
-        _analysis["data"] is not None
-        and now - _analysis["at"] <= ANALYSIS_TTL
-        and _analysis["snap_at"] == _snap["at"]
-    )
-    if not fresh:
-        _analysis["data"] = analyze_market(data)
-        _analysis["at"] = now
-        _analysis["snap_at"] = _snap["at"]
-    return _analysis["data"]
+
+    with _analysis_lock:
+        cached = _analysis["data"]
+        stale = (
+            cached is None
+            or _analysis["fingerprint"] != fp
+            or now - _analysis["at"] > ANALYSIS_MAX_AGE
+        )
+        if stale and not _analysis["generating"]:
+            _analysis["generating"] = True
+            threading.Thread(
+                target=_regenerate_analysis, args=(data, fp), daemon=True
+            ).start()
+
+        if cached is not None:
+            return "ok", cached
+        return ("pending" if _analysis["generating"] else "unavailable"), None
 
 
 def _sparkline(history, n=30, w=100, h=28, pad=2):
-    """Turn the last n closes into an SVG polyline 'x,y x,y ...' string."""
     try:
         closes = [float(c) for c in history["Close"].tail(n).tolist()]
     except Exception:
@@ -115,19 +155,17 @@ def index():
         analysis_enabled=bool(os.environ.get("GEMINI_API_KEY")),
         fetched_at=fetched_at,
         news_enabled=news_enabled,
-        cache_ttl_min=SNAPSHOT_TTL // 60,
+        refresh_secs=SNAPSHOT_TTL,
         next_refresh=next_refresh,
     )
 
 
 @app.route("/api/analysis")
 def api_analysis():
-    if not os.environ.get("GEMINI_API_KEY"):
-        return {"status": "disabled"}, 200
-    analysis = get_analysis()
-    if not analysis:
-        return {"status": "unavailable"}, 200
-    payload = {k: v for k, v in analysis.items() if k != "by_ticker"}
+    status, data = get_analysis_state()
+    if status != "ok":
+        return {"status": status}
+    payload = {k: v for k, v in data.items() if k != "by_ticker"}
     payload["status"] = "ok"
     return Response(json.dumps(payload, default=str), mimetype="application/json")
 
@@ -148,7 +186,7 @@ def api_chat():
         return {"error": "last message must be from the user"}, 400
 
     data, _ = get_snapshot()
-    analysis = _analysis["data"]  # whatever's cached; fine if None
+    analysis = _analysis["data"]  # whatever's cached; grounded on news either way
 
     @stream_with_context
     def generate():
@@ -170,4 +208,4 @@ def healthz():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=port, debug=True, threaded=True)
