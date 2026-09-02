@@ -3,7 +3,7 @@
 The project is built in four phases. Each phase is usable on its own and leaves
 the previous one working.
 
-Legend: ✅ done · 🔜 next up · ⬜ not started
+Legend: ✅ done · 🚧 in progress · 🔜 next up · ⬜ not started
 
 ---
 
@@ -25,21 +25,26 @@ a backtest, and the snapshot renders on a public URL.
 
 ---
 
-## Phase 2 — LLM reasoning layer 🔜
+## Phase 2 — LLM reasoning layer 🚧
 
-Turn a per-ticker snapshot into a structured view with a confidence score.
+Turn the whole snapshot into one combined market read with per-ticker
+confidence scores, plus a chat box to interrogate it.
 
-- [ ] Define the output schema (`stance`, `confidence` 0–1, `rationale`,
-      `key_factors`, `risks`, `time_horizon`)
-- [ ] Prompt design: feed price stats + recent headlines, ask for the schema
-- [ ] Model call wrapper (provider-agnostic; retries, timeout, cost logging)
+- [x] Output schema (`market_summary`, `top_stories`, `themes`, and per ticker:
+      `stance`, `confidence` 0–1, `rationale`, `key_factors`, `risks`, `catalysts`)
+- [x] Prompt design: feed all price stats + all headlines together, one call,
+      analyst-desk-note framing
+- [x] Model wrapper (`reasoning.py`, Google Gemini free tier, model fallback on 503)
+- [x] Market read + per-ticker read rendered on the page (async, non-blocking)
+- [x] `/api/chat` — streaming chat grounded in the snapshot + read
+- [x] Analysis cached separately from the data snapshot
+- [x] Best-effort: page renders fine when the key is missing or the call fails
 - [ ] Confidence calibration — track predicted confidence vs realized outcome
-- [ ] Add the reasoning block to the web page
-- [ ] Cache reasoning alongside the data snapshot
-- [ ] Guardrails: refuse/flag on thin or stale data
+- [ ] Cost/usage logging per call
 
-**Exit criteria:** each ticker on the page shows a scored, sourced thesis that
-updates with the data.
+**Exit criteria:** the page shows a combined market read and a scored, sourced
+thesis per ticker, and the chat can answer questions about them. *(Calibration
+tracking deferred — needs Phase 3's historical loop.)*
 
 ---
 

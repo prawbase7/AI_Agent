@@ -7,3 +7,4 @@ python-dotenv>=1.0,<2
 pandas>=2.2,<4
 Flask>=3.1,<4
 gunicorn>=23,<27
+google-genai>=1.0,<3

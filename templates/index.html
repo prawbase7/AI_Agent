@@ -18,6 +18,7 @@
       --dim: #5b6376;
       --up: #17e6a1;
       --down: #ff5c72;
+      --flat: #8b93a7;
       --accent: #6c8cff;
       --accent-2: #b06cff;
       --cyan: #29d3ff;
@@ -29,7 +30,7 @@
     body {
       margin: 0;
       min-height: 100vh;
-      padding: 3.5rem 1.25rem 5rem;
+      padding: 3.5rem 1.25rem 7rem;
       background: var(--bg);
       color: var(--text);
       font-family: var(--sans);
@@ -38,7 +39,6 @@
       overflow-x: hidden;
       position: relative;
     }
-    /* ambient background: grid + two colored glows */
     body::before {
       content: "";
       position: fixed; inset: 0; z-index: -2;
@@ -59,7 +59,7 @@
     }
     .wrap { max-width: 760px; margin: 0 auto; }
 
-    header { margin-bottom: 2.25rem; }
+    header { margin-bottom: 1.75rem; }
     .eyebrow {
       display: inline-flex; align-items: center; gap: .5rem;
       font-family: var(--mono);
@@ -92,11 +92,7 @@
       -webkit-background-clip: text; background-clip: text;
       -webkit-text-fill-color: transparent;
     }
-    .meta {
-      font-family: var(--mono);
-      font-size: .78rem;
-      color: var(--dim);
-    }
+    .meta { font-family: var(--mono); font-size: .78rem; color: var(--dim); }
     .meta b { color: var(--muted); font-weight: 500; }
 
     .card {
@@ -118,7 +114,6 @@
     .card:nth-child(4) { animation-delay: .19s; }
     .card:nth-child(5) { animation-delay: .26s; }
     @keyframes rise { to { opacity: 1; transform: none; } }
-    /* gradient hairline along the top edge */
     .card::before {
       content: "";
       position: absolute; left: 0; right: 0; top: 0; height: 1px;
@@ -126,41 +121,64 @@
       opacity: .55;
     }
 
+    /* ---- Market read card ---- */
+    .read-card .kicker {
+      font-family: var(--mono);
+      font-size: .68rem; letter-spacing: .2em; text-transform: uppercase;
+      color: var(--cyan);
+      display: flex; align-items: center; gap: .5rem;
+      margin-bottom: .8rem;
+    }
+    .read-card .summary { font-size: 1.02rem; line-height: 1.6; }
+    .themes { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: 1rem; }
+    .theme {
+      font-family: var(--mono); font-size: .72rem;
+      padding: .3rem .6rem; border-radius: 7px;
+      background: rgba(108,140,255,0.12);
+      border: 1px solid rgba(108,140,255,0.28);
+      color: #c7d2ff;
+      cursor: default;
+    }
+    .theme[title] { cursor: help; }
+    .stories { margin-top: 1.2rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+    .stories h3 {
+      font-family: var(--mono); font-size: .68rem; letter-spacing: .2em;
+      text-transform: uppercase; color: var(--dim); margin: 0 0 .7rem;
+    }
+    .story { padding: .5rem 0; border-bottom: 1px solid rgba(120,140,200,0.08); }
+    .story:last-child { border-bottom: none; }
+    .story .h { font-weight: 500; font-size: .93rem; }
+    .story .w { color: var(--muted); font-size: .85rem; margin-top: .2rem; }
+    .story .tags { display: flex; gap: .35rem; margin-top: .35rem; flex-wrap: wrap; }
+    .itag {
+      font-family: var(--mono); font-size: .62rem; letter-spacing: .06em;
+      padding: .12rem .4rem; border-radius: 5px;
+      border: 1px solid var(--border); color: var(--muted);
+    }
+    .impact-high { color: var(--down); border-color: rgba(255,92,114,.4); }
+    .impact-medium { color: #ffd166; border-color: rgba(255,209,102,.4); }
+    .impact-low { color: var(--dim); }
+
+    .skeleton { animation: shimmer 1.4s ease-in-out infinite; }
+    @keyframes shimmer { 0%,100% { opacity: .35; } 50% { opacity: .7; } }
+    .sk-line { height: .8rem; border-radius: 4px; background: rgba(139,147,167,0.25); margin: .5rem 0; }
+
     .row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
     .ident { display: flex; flex-direction: column; gap: .3rem; }
-    .ticker {
-      font-family: var(--mono);
-      font-size: 1.35rem;
-      font-weight: 700;
-      letter-spacing: .02em;
-    }
+    .ticker { font-family: var(--mono); font-size: 1.35rem; font-weight: 700; letter-spacing: .02em; }
     .chip {
-      align-self: flex-start;
-      font-family: var(--mono);
+      align-self: flex-start; font-family: var(--mono);
       font-size: .66rem; letter-spacing: .12em; text-transform: uppercase;
-      color: var(--muted);
-      padding: .2rem .55rem;
-      border: 1px solid var(--border);
-      border-radius: 6px;
+      color: var(--muted); padding: .2rem .55rem;
+      border: 1px solid var(--border); border-radius: 6px;
     }
 
     .quote { text-align: right; flex-shrink: 0; }
-    .price {
-      font-family: var(--mono);
-      font-size: 1.55rem;
-      font-weight: 700;
-      font-variant-numeric: tabular-nums;
-      letter-spacing: -0.01em;
-    }
+    .price { font-family: var(--mono); font-size: 1.55rem; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
     .delta {
-      display: inline-block;
-      margin-top: .3rem;
-      font-family: var(--mono);
-      font-size: .82rem;
-      font-weight: 500;
-      font-variant-numeric: tabular-nums;
-      padding: .18rem .5rem;
-      border-radius: 7px;
+      display: inline-block; margin-top: .3rem;
+      font-family: var(--mono); font-size: .82rem; font-weight: 500;
+      font-variant-numeric: tabular-nums; padding: .18rem .5rem; border-radius: 7px;
     }
     .delta.up   { color: var(--up);   background: rgba(23,230,161,0.10);  box-shadow: inset 0 0 0 1px rgba(23,230,161,0.28), 0 0 18px rgba(23,230,161,0.15); }
     .delta.down { color: var(--down); background: rgba(255,92,114,0.10);  box-shadow: inset 0 0 0 1px rgba(255,92,114,0.28), 0 0 18px rgba(255,92,114,0.14); }
@@ -169,66 +187,128 @@
 
     .range { margin-top: .5rem; }
     .range-track {
-      position: relative;
-      height: 4px; border-radius: 999px;
+      position: relative; height: 4px; border-radius: 999px;
       background: linear-gradient(90deg, rgba(255,92,114,0.35), rgba(120,140,200,0.25), rgba(23,230,161,0.4));
     }
     .range-dot {
-      position: absolute; top: 50%;
-      width: 11px; height: 11px; border-radius: 50%;
-      background: #fff;
-      transform: translate(-50%, -50%);
+      position: absolute; top: 50%; width: 11px; height: 11px; border-radius: 50%;
+      background: #fff; transform: translate(-50%, -50%);
       box-shadow: 0 0 0 3px rgba(108,140,255,0.35), 0 0 14px rgba(41,211,255,0.6);
     }
     .range-labels {
-      display: flex; justify-content: space-between;
-      margin-top: .45rem;
-      font-family: var(--mono); font-size: .7rem; color: var(--dim);
-      font-variant-numeric: tabular-nums;
+      display: flex; justify-content: space-between; margin-top: .45rem;
+      font-family: var(--mono); font-size: .7rem; color: var(--dim); font-variant-numeric: tabular-nums;
     }
+
+    /* ---- per-ticker LLM read ---- */
+    .tread { margin-top: 1.2rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+    .tread-head {
+      display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-bottom: .6rem;
+    }
+    .stance {
+      font-family: var(--mono); font-size: .68rem; letter-spacing: .1em; text-transform: uppercase;
+      padding: .2rem .55rem; border-radius: 6px; font-weight: 700;
+    }
+    .stance.bullish { color: var(--up); background: rgba(23,230,161,.12); box-shadow: inset 0 0 0 1px rgba(23,230,161,.3); }
+    .stance.bearish { color: var(--down); background: rgba(255,92,114,.12); box-shadow: inset 0 0 0 1px rgba(255,92,114,.3); }
+    .stance.neutral { color: var(--flat); background: rgba(139,147,167,.12); box-shadow: inset 0 0 0 1px rgba(139,147,167,.3); }
+    .conf { flex: 1; min-width: 120px; }
+    .conf-bar { height: 5px; border-radius: 999px; background: rgba(139,147,167,.2); overflow: hidden; }
+    .conf-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), var(--cyan)); }
+    .conf-label { font-family: var(--mono); font-size: .64rem; color: var(--dim); margin-top: .25rem; letter-spacing: .05em; }
+    .tread .rationale { font-size: .92rem; color: var(--text); }
+    .tread .cols { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem 1.2rem; margin-top: .7rem; }
+    .tread .cols h4 {
+      font-family: var(--mono); font-size: .6rem; letter-spacing: .14em; text-transform: uppercase;
+      color: var(--dim); margin: 0 0 .3rem;
+    }
+    .tread .cols ul { margin: 0; padding-left: 1rem; }
+    .tread .cols li { font-size: .82rem; color: var(--muted); margin-bottom: .2rem; }
+    @media (max-width: 480px) { .tread .cols { grid-template-columns: 1fr; } }
 
     .news { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border); }
     .news-head {
-      font-family: var(--mono);
-      font-size: .68rem; letter-spacing: .2em; text-transform: uppercase;
-      color: var(--dim);
-      margin-bottom: .7rem;
+      font-family: var(--mono); font-size: .68rem; letter-spacing: .2em; text-transform: uppercase;
+      color: var(--dim); margin-bottom: .7rem;
     }
     .news ul { list-style: none; margin: 0; padding: 0; }
     .news li {
-      padding: .4rem 0 .4rem .9rem;
-      border-left: 2px solid var(--border);
-      margin-bottom: .35rem;
-      transition: border-color .18s, padding-left .18s;
+      padding: .4rem 0 .4rem .9rem; border-left: 2px solid var(--border);
+      margin-bottom: .35rem; transition: border-color .18s, padding-left .18s;
     }
     .news li:hover { border-left-color: var(--accent); padding-left: 1.15rem; }
     .news a { color: var(--text); text-decoration: none; font-size: .9rem; }
     .news a:hover { color: var(--cyan); }
     .news .src {
-      font-family: var(--mono);
-      font-size: .68rem; text-transform: uppercase; letter-spacing: .08em;
-      color: var(--dim);
-      display: block; margin-top: .15rem;
+      font-family: var(--mono); font-size: .68rem; text-transform: uppercase; letter-spacing: .08em;
+      color: var(--dim); display: block; margin-top: .15rem;
     }
     .news .empty { font-family: var(--mono); font-size: .78rem; color: var(--dim); }
 
-    footer {
-      margin-top: 2.5rem;
-      font-family: var(--mono);
-      font-size: .72rem;
-      color: var(--dim);
-      line-height: 1.7;
-    }
+    footer { margin-top: 2.5rem; font-family: var(--mono); font-size: .72rem; color: var(--dim); line-height: 1.7; }
     footer .tag { color: var(--muted); }
+
+    /* ---- chat dock ---- */
+    .chat-toggle {
+      position: fixed; right: 1.25rem; bottom: 1.25rem; z-index: 40;
+      display: flex; align-items: center; gap: .5rem;
+      font-family: var(--mono); font-size: .78rem; letter-spacing: .05em;
+      padding: .7rem 1.05rem; border-radius: 999px; cursor: pointer;
+      color: #fff; border: 1px solid rgba(108,140,255,.5);
+      background: linear-gradient(120deg, rgba(108,140,255,.9), rgba(176,108,255,.9));
+      box-shadow: 0 8px 30px rgba(108,140,255,.35);
+    }
+    .chat-toggle:hover { filter: brightness(1.08); }
+
+    .chat {
+      position: fixed; right: 1.25rem; bottom: 1.25rem; z-index: 50;
+      width: min(420px, calc(100vw - 2.5rem));
+      height: min(560px, calc(100vh - 2.5rem));
+      display: flex; flex-direction: column;
+      border-radius: 18px; overflow: hidden;
+      background: rgba(12, 15, 24, 0.92);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+      box-shadow: 0 20px 60px rgba(0,0,0,.5);
+    }
+    .chat[hidden] { display: none; }
+    .chat-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .85rem 1rem; border-bottom: 1px solid var(--border);
+    }
+    .chat-head .t { font-family: var(--mono); font-size: .74rem; letter-spacing: .14em; text-transform: uppercase; color: var(--cyan); }
+    .chat-head button { background: none; border: none; color: var(--muted); font-size: 1.2rem; cursor: pointer; line-height: 1; }
+    .chat-log { flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: .8rem; }
+    .msg { font-size: .9rem; line-height: 1.5; white-space: pre-wrap; }
+    .msg.user { align-self: flex-end; max-width: 85%; padding: .55rem .8rem; border-radius: 12px 12px 3px 12px; background: rgba(108,140,255,.16); border: 1px solid rgba(108,140,255,.3); }
+    .msg.bot { align-self: flex-start; max-width: 92%; color: var(--text); }
+    .msg.bot.pending::after { content: "▍"; animation: shimmer 1s infinite; }
+    .msg .who { font-family: var(--mono); font-size: .58rem; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); display: block; margin-bottom: .2rem; }
+    .chat-hint { font-family: var(--mono); font-size: .72rem; color: var(--dim); padding: 0 1rem .4rem; }
+    .chat-form { display: flex; gap: .5rem; padding: .8rem 1rem 1rem; border-top: 1px solid var(--border); }
+    .chat-form input {
+      flex: 1; background: rgba(255,255,255,.04); border: 1px solid var(--border);
+      border-radius: 10px; padding: .6rem .8rem; color: var(--text);
+      font-family: var(--sans); font-size: .9rem; outline: none;
+    }
+    .chat-form input:focus { border-color: var(--accent); }
+    .chat-form button {
+      border: none; border-radius: 10px; padding: 0 1rem; cursor: pointer;
+      font-family: var(--mono); font-size: .8rem; color: #fff;
+      background: linear-gradient(120deg, var(--accent), var(--accent-2));
+    }
+    .chat-form button:disabled { opacity: .5; cursor: not-allowed; }
 
     @media (max-width: 480px) {
       body { padding-top: 2.5rem; }
       .price { font-size: 1.3rem; }
       .ticker { font-size: 1.15rem; }
+      .chat { right: 0; bottom: 0; width: 100vw; height: 82vh; border-radius: 18px 18px 0 0; }
+      .chat-toggle { right: 1rem; bottom: 1rem; }
     }
     @media (prefers-reduced-motion: reduce) {
       .card { animation: none; opacity: 1; transform: none; }
-      .pulse { animation: none; }
+      .pulse, .skeleton, .msg.bot.pending::after { animation: none; }
     }
   </style>
 </head>
@@ -243,9 +323,20 @@
       </div>
     </header>
 
+    {% if analysis_enabled %}
+    <div class="card read-card" id="read-card">
+      <div class="kicker"><span class="pulse"></span> Market Read · AI</div>
+      <div id="read-body" class="skeleton">
+        <div class="sk-line" style="width:92%"></div>
+        <div class="sk-line" style="width:80%"></div>
+        <div class="sk-line" style="width:66%"></div>
+      </div>
+    </div>
+    {% endif %}
+
     {% for v in views %}
       {% set p = v.price %}
-      <div class="card">
+      <div class="card" data-ticker="{{ v.ticker }}">
         <div class="row">
           <div class="ident">
             <span class="ticker">{{ v.ticker }}</span>
@@ -293,6 +384,8 @@
           </div>
         {% endif %}
 
+        {% if analysis_enabled %}<div class="tread" data-read hidden></div>{% endif %}
+
         <div class="news">
           <div class="news-head">Signal · Recent News ({{ v.news|length }})</div>
           {% if v.news %}
@@ -320,13 +413,32 @@
     <footer>
       <span class="tag">PRICE</span> yfinance &nbsp;·&nbsp;
       <span class="tag">NEWS</span> Alpaca → NewsAPI &nbsp;·&nbsp;
+      <span class="tag">READ</span> Gemini &nbsp;·&nbsp;
       <span class="tag">CACHE</span> {{ cache_ttl_min }}m<br>
-      Not investment advice. Data may be delayed.
+      Analysis is AI-generated and may be wrong. Not investment advice.
     </footer>
   </div>
 
+  {% if analysis_enabled %}
+  <button class="chat-toggle" id="chat-open">✦ Ask the desk</button>
+  <div class="chat" id="chat" hidden>
+    <div class="chat-head">
+      <span class="t">Ask the desk</span>
+      <button id="chat-close" aria-label="Close">×</button>
+    </div>
+    <div class="chat-log" id="chat-log">
+      <div class="msg bot"><span class="who">Desk</span>Ask me about the prices, the news, or the market read on screen.</div>
+    </div>
+    <div class="chat-hint">e.g. "Why is TSLA down?" · "What's the biggest risk to NVDA?"</div>
+    <form class="chat-form" id="chat-form">
+      <input id="chat-input" type="text" autocomplete="off" placeholder="Type a question…" />
+      <button type="submit" id="chat-send">Send</button>
+    </form>
+  </div>
+  {% endif %}
+
   <script>
-    // live countdown to the next server-side cache refresh, then reload
+    // ---- refresh countdown ----
     (function () {
       var el = document.getElementById("countdown");
       var left = {{ next_refresh }};
@@ -337,6 +449,151 @@
         el.textContent = m + ":" + (s < 10 ? "0" : "") + s;
       }, 1000);
     })();
+
+    {% if analysis_enabled %}
+    // ---- market read ----
+    var esc = function (s) {
+      return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+      });
+    };
+
+    function renderRead(a) {
+      var body = document.getElementById("read-body");
+      if (!a || a.status !== "ok") {
+        body.classList.remove("skeleton");
+        body.innerHTML = '<div class="empty" style="font-family:var(--mono);color:var(--dim);font-size:.8rem">'
+          + (a && a.status === "unavailable" ? "// analysis temporarily unavailable" : "// analysis disabled")
+          + "</div>";
+        return;
+      }
+      body.classList.remove("skeleton");
+      var html = '<div class="summary">' + esc(a.market_summary) + "</div>";
+      if (a.themes && a.themes.length) {
+        html += '<div class="themes">' + a.themes.map(function (t) {
+          return '<span class="theme" title="' + esc(t.description)
+            + (t.affected_tickers && t.affected_tickers.length ? " — " + esc(t.affected_tickers.join(", ")) : "")
+            + '">' + esc(t.theme) + "</span>";
+        }).join("") + "</div>";
+      }
+      if (a.top_stories && a.top_stories.length) {
+        html += '<div class="stories"><h3>Top stories</h3>' + a.top_stories.map(function (s) {
+          return '<div class="story"><div class="h">' + esc(s.headline) + "</div>"
+            + '<div class="w">' + esc(s.why_it_matters) + "</div>"
+            + '<div class="tags"><span class="itag impact-' + esc(s.impact) + '">' + esc(s.impact) + " impact</span>"
+            + (s.tickers || []).map(function (t) { return '<span class="itag">' + esc(t) + "</span>"; }).join("")
+            + "</div></div>";
+        }).join("") + "</div>";
+      }
+      body.innerHTML = html;
+
+      // distribute per-ticker reads
+      (a.tickers || []).forEach(function (t) {
+        var card = document.querySelector('.card[data-ticker="' + t.ticker + '"]');
+        if (!card) return;
+        var slot = card.querySelector("[data-read]");
+        if (!slot) return;
+        var pct = Math.round((t.confidence || 0) * 100);
+        var list = function (items) {
+          return (items || []).slice(0, 4).map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("");
+        };
+        slot.innerHTML =
+          '<div class="tread-head">'
+          + '<span class="stance ' + esc(t.stance) + '">' + esc(t.stance) + "</span>"
+          + '<span class="conf"><span class="conf-bar"><span class="conf-fill" style="width:' + pct + '%"></span></span>'
+          + '<span class="conf-label">confidence ' + pct + "%</span></span>"
+          + "</div>"
+          + '<div class="rationale">' + esc(t.rationale) + "</div>"
+          + '<div class="cols">'
+          + "<div><h4>Key factors</h4><ul>" + list(t.key_factors) + "</ul></div>"
+          + "<div><h4>Risks</h4><ul>" + list(t.risks) + "</ul></div>"
+          + "<div><h4>Catalysts</h4><ul>" + list(t.catalysts) + "</ul></div>"
+          + "</div>";
+        slot.hidden = false;
+      });
+    }
+
+    fetch("/api/analysis")
+      .then(function (r) { return r.json(); })
+      .then(renderRead)
+      .catch(function () { renderRead({ status: "unavailable" }); });
+
+    // ---- chat ----
+    var chat = document.getElementById("chat");
+    var openBtn = document.getElementById("chat-open");
+    var closeBtn = document.getElementById("chat-close");
+    var log = document.getElementById("chat-log");
+    var form = document.getElementById("chat-form");
+    var input = document.getElementById("chat-input");
+    var send = document.getElementById("chat-send");
+    var history = [];
+
+    openBtn.addEventListener("click", function () { chat.hidden = false; openBtn.hidden = true; input.focus(); });
+    closeBtn.addEventListener("click", function () { chat.hidden = true; openBtn.hidden = false; });
+
+    function addMsg(role, text) {
+      var d = document.createElement("div");
+      d.className = "msg " + (role === "user" ? "user" : "bot");
+      d.innerHTML = '<span class="who">' + (role === "user" ? "You" : "Desk") + "</span>" + esc(text);
+      log.appendChild(d);
+      log.scrollTop = log.scrollHeight;
+      return d;
+    }
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var q = input.value.trim();
+      if (!q) return;
+      input.value = "";
+      send.disabled = true;
+      addMsg("user", q);
+      history.push({ role: "user", content: q });
+
+      var bot = addMsg("bot", "");
+      bot.classList.add("pending");
+      var acc = "";
+
+      fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: history }),
+      }).then(function (res) {
+        var reader = res.body.getReader();
+        var dec = new TextDecoder();
+        var buf = "";
+        function pump() {
+          return reader.read().then(function (r) {
+            if (r.done) { finish(); return; }
+            buf += dec.decode(r.value, { stream: true });
+            var parts = buf.split("\n\n");
+            buf = parts.pop();
+            parts.forEach(function (block) {
+              var line = block.replace(/^data: /, "").trim();
+              if (!line || line === "[DONE]") return;
+              try {
+                var obj = JSON.parse(line);
+                if (obj.text) { acc += obj.text; bot.innerHTML = '<span class="who">Desk</span>' + esc(acc); }
+                else if (obj.error) { acc += "\n[error: " + obj.error + "]"; bot.innerHTML = '<span class="who">Desk</span>' + esc(acc); }
+              } catch (_) {}
+              log.scrollTop = log.scrollHeight;
+            });
+            return pump();
+          });
+        }
+        function finish() {
+          bot.classList.remove("pending");
+          history.push({ role: "assistant", content: acc });
+          send.disabled = false;
+          input.focus();
+        }
+        return pump();
+      }).catch(function (err) {
+        bot.classList.remove("pending");
+        bot.innerHTML = '<span class="who">Desk</span>' + esc("Connection error: " + err.message);
+        send.disabled = false;
+      });
+    });
+    {% endif %}
   </script>
 </body>
 </html>

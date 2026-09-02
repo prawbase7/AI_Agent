@@ -1,38 +1,61 @@
 """
 AI Research Agent - Web layer
 -----------------------------
-Serves the price + news snapshot from data_sources.py as a single read-only
-web page. Results are cached in memory for a few minutes so page reloads are
-fast and we don't hammer yfinance / NewsAPI.
+Serves the price + news snapshot from data_sources.py as a page, plus:
+  - GET  /api/analysis  -> the LLM market read (generated lazily, cached)
+  - POST /api/chat      -> streaming chat grounded in the snapshot + analysis
 
-Run locally:
-    python3 app.py          # http://localhost:8000
+The page never blocks on the model: it renders prices immediately and the
+browser fetches the analysis afterward. Snapshot and analysis have separate
+in-memory caches.
 
-Production (Render):
-    gunicorn app:app
+Run locally:   python3 app.py          # http://localhost:8000
+Production:    gunicorn app:app
 """
 
+import json
 import os
 import time
 from datetime import datetime
 
-from flask import Flask, render_template
+from flask import Flask, Response, render_template, request, stream_with_context
 
 from data_sources import build_snapshot, TICKERS
+from reasoning import analyze_market, chat_stream
 
 app = Flask(__name__)
 
-CACHE_TTL_SECONDS = 300
-_cache = {"data": None, "fetched_at": 0.0}
+SNAPSHOT_TTL = 300      # seconds — price + news
+ANALYSIS_TTL = 300      # seconds — LLM market read
+
+_snap = {"data": None, "at": 0.0}
+_analysis = {"data": None, "at": 0.0, "snap_at": 0.0}
 
 
 def get_snapshot():
-    """Return (snapshot, fetched_at_datetime), refreshing if the cache is stale."""
+    """Return (snapshot, fetched_at). Refreshes when stale."""
     now = time.time()
-    if _cache["data"] is None or now - _cache["fetched_at"] > CACHE_TTL_SECONDS:
-        _cache["data"] = build_snapshot(TICKERS)
-        _cache["fetched_at"] = now
-    return _cache["data"], datetime.fromtimestamp(_cache["fetched_at"])
+    if _snap["data"] is None or now - _snap["at"] > SNAPSHOT_TTL:
+        _snap["data"] = build_snapshot(TICKERS)
+        _snap["at"] = now
+    return _snap["data"], datetime.fromtimestamp(_snap["at"])
+
+
+def get_analysis():
+    """Return the market read dict (or None). Regenerates when stale or when the
+    snapshot it was built from has been replaced."""
+    data, _ = get_snapshot()
+    now = time.time()
+    fresh = (
+        _analysis["data"] is not None
+        and now - _analysis["at"] <= ANALYSIS_TTL
+        and _analysis["snap_at"] == _snap["at"]
+    )
+    if not fresh:
+        _analysis["data"] = analyze_market(data)
+        _analysis["at"] = now
+        _analysis["snap_at"] = _snap["at"]
+    return _analysis["data"]
 
 
 def _sparkline(history, n=30, w=100, h=28, pad=2):
@@ -55,7 +78,6 @@ def _sparkline(history, n=30, w=100, h=28, pad=2):
 
 
 def _range_position(p):
-    """Where the latest close sits in the 52-week range, as 0-100 (or None)."""
     lo, hi, last = p.get("52w_low"), p.get("52w_high"), p.get("latest_close")
     if None in (lo, hi, last) or hi == lo:
         return None
@@ -63,7 +85,6 @@ def _range_position(p):
 
 
 def build_views(data):
-    """Shape the raw snapshot into per-ticker view models for the template."""
     views = []
     for ticker, d in data.items():
         p = d["price"]
@@ -87,17 +108,59 @@ def index():
         (os.environ.get("ALPACA_API_KEY_ID") and os.environ.get("ALPACA_API_SECRET_KEY"))
         or os.environ.get("NEWSAPI_KEY")
     )
-    next_refresh = int(
-        max(0, CACHE_TTL_SECONDS - (time.time() - _cache["fetched_at"]))
-    )
+    next_refresh = int(max(0, SNAPSHOT_TTL - (time.time() - _snap["at"])))
     return render_template(
         "index.html",
         views=build_views(data),
+        analysis_enabled=bool(os.environ.get("GEMINI_API_KEY")),
         fetched_at=fetched_at,
         news_enabled=news_enabled,
-        cache_ttl_min=CACHE_TTL_SECONDS // 60,
+        cache_ttl_min=SNAPSHOT_TTL // 60,
         next_refresh=next_refresh,
     )
+
+
+@app.route("/api/analysis")
+def api_analysis():
+    if not os.environ.get("GEMINI_API_KEY"):
+        return {"status": "disabled"}, 200
+    analysis = get_analysis()
+    if not analysis:
+        return {"status": "unavailable"}, 200
+    payload = {k: v for k, v in analysis.items() if k != "by_ticker"}
+    payload["status"] = "ok"
+    return Response(json.dumps(payload, default=str), mimetype="application/json")
+
+
+@app.route("/api/chat", methods=["POST"])
+def api_chat():
+    if not os.environ.get("GEMINI_API_KEY"):
+        return {"error": "chat is not configured"}, 503
+
+    body = request.get_json(silent=True) or {}
+    raw = body.get("messages") or []
+    messages = [
+        {"role": "assistant" if m.get("role") == "assistant" else "user",
+         "content": str(m.get("content", ""))[:4000]}
+        for m in raw if m.get("content")
+    ][-20:]
+    if not messages or messages[-1]["role"] != "user":
+        return {"error": "last message must be from the user"}, 400
+
+    data, _ = get_snapshot()
+    analysis = _analysis["data"]  # whatever's cached; fine if None
+
+    @stream_with_context
+    def generate():
+        try:
+            for chunk in chat_stream(messages, data, analysis):
+                yield f"data: {json.dumps({'text': chunk})}\n\n"
+        except Exception as e:  # noqa: BLE001
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return Response(generate(), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @app.route("/healthz")
