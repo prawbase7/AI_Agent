@@ -28,6 +28,22 @@ TICKERS = ["AAPL", "NVDA", "TSLA"]
 NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "")  # set in .env or your environment
 NEWS_LOOKBACK_DAYS = 3
 
+# Full company names give NewsAPI far better recall than raw tickers.
+COMPANY_NAMES = {
+    "AAPL": "Apple",
+    "NVDA": "Nvidia",
+    "TSLA": "Tesla",
+}
+
+# Terms that keep results market-relevant (drops product reviews, lawsuits, etc.)
+MARKET_TERMS = [
+    "stock", "shares", "earnings", "revenue", "guidance",
+    "analyst", "price target", "upgrade", "downgrade", "market cap",
+]
+
+# Low-signal aggregators worth filtering out.
+EXCLUDE_DOMAINS = ["biztoc.com"]
+
 
 def get_price_data(ticker: str, period: str = "1y"):
     """Fetch recent price history + basic stats for a ticker.
@@ -82,24 +98,34 @@ def get_price_data(ticker: str, period: str = "1y"):
     }
 
 
+def _build_news_query(ticker: str, company_name: str = None) -> str:
+    """(Apple OR AAPL) AND (stock OR earnings OR analyst OR ...)"""
+    name = company_name or COMPANY_NAMES.get(ticker, ticker)
+    subject = f'("{name}" OR {ticker})' if name != ticker else ticker
+    relevance = " OR ".join(f'"{t}"' if " " in t else t for t in MARKET_TERMS)
+    return f"{subject} AND ({relevance})"
+
+
 def get_news(ticker: str, company_name: str = None):
-    """Fetch recent news headlines related to a ticker/company via NewsAPI."""
+    """Fetch recent market-relevant news for a ticker/company via NewsAPI."""
     if not NEWSAPI_KEY:
         print("⚠️  No NEWSAPI_KEY set — skipping news fetch. See setup instructions.")
         return []
 
-    query = company_name or ticker
     from_date = (datetime.now() - timedelta(days=NEWS_LOOKBACK_DAYS)).strftime("%Y-%m-%d")
 
     url = "https://newsapi.org/v2/everything"
     params = {
-        "q": query,
+        "q": _build_news_query(ticker, company_name),
+        "searchIn": "title,description",  # ignore matches buried in article body
         "from": from_date,
         "sortBy": "publishedAt",
         "language": "en",
         "apiKey": NEWSAPI_KEY,
-        "pageSize": 10,
+        "pageSize": 20,  # over-fetch, we dedupe and trim below
     }
+    if EXCLUDE_DOMAINS:
+        params["excludeDomains"] = ",".join(EXCLUDE_DOMAINS)
 
     response = requests.get(url, params=params)
     if response.status_code != 200:
@@ -107,16 +133,26 @@ def get_news(ticker: str, company_name: str = None):
         return []
 
     articles = response.json().get("articles", [])
-    return [
-        {
-            "title": a["title"],
-            "source": a["source"]["name"],
-            "published_at": a["publishedAt"],
-            "url": a["url"],
-            "description": a.get("description"),
-        }
-        for a in articles
-    ]
+
+    seen_titles = set()
+    results = []
+    for a in articles:
+        title = (a.get("title") or "").strip()
+        if not title or title.lower() in seen_titles:
+            continue
+        seen_titles.add(title.lower())
+        results.append(
+            {
+                "title": title,
+                "source": a["source"]["name"],
+                "published_at": a["publishedAt"],
+                "url": a["url"],
+                "description": a.get("description"),
+            }
+        )
+        if len(results) == 10:
+            break
+    return results
 
 
 def build_snapshot(tickers=TICKERS):
@@ -125,7 +161,7 @@ def build_snapshot(tickers=TICKERS):
     for ticker in tickers:
         print(f"Fetching data for {ticker}...")
         price_data = get_price_data(ticker)
-        news_data = get_news(ticker)
+        news_data = get_news(ticker, COMPANY_NAMES.get(ticker))
         snapshot[ticker] = {
             "price": price_data,
             "news": news_data,
