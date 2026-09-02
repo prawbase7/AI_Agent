@@ -38,7 +38,10 @@ def get_snapshot():
 @app.route("/")
 def index():
     data, fetched_at = get_snapshot()
-    news_enabled = bool(os.environ.get("NEWSAPI_KEY"))
+    news_enabled = bool(
+        (os.environ.get("ALPACA_API_KEY_ID") and os.environ.get("ALPACA_API_SECRET_KEY"))
+        or os.environ.get("NEWSAPI_KEY")
+    )
     return render_template(
         "index.html",
         data=data,

@@ -96,23 +96,26 @@
             <ul>
               {% for a in d.news[:5] %}
                 <li>
-                  <a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.title }}</a>
+                  {% if a.url %}
+                    <a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.title }}</a>
+                  {% else %}
+                    {{ a.title }}
+                  {% endif %}
                   <span class="src">— {{ a.source }}</span>
                 </li>
               {% endfor %}
             </ul>
           {% elif not news_enabled %}
-            <div class="src">NEWSAPI_KEY not set — news disabled.</div>
+            <div class="src">No news credentials set (ALPACA_API_KEY_ID / NEWSAPI_KEY).</div>
           {% else %}
-            <div class="src">No recent articles (or NewsAPI blocked this request).</div>
+            <div class="src">No recent articles for this ticker.</div>
           {% endif %}
         </div>
       </div>
     {% endfor %}
 
     <div class="note">
-      Prices via yfinance. News via NewsAPI (free plan works from localhost only —
-      expect it to be empty once deployed). Not investment advice.
+      Prices via yfinance. News via Alpaca (fallback: NewsAPI). Not investment advice.
     </div>
   </div>
 </body>

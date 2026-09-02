@@ -1,32 +1,46 @@
 """
 AI Research Agent - Step 1: Data Sources
 ------------------------------------------
-Pulls price data (yfinance) and recent news (NewsAPI) for a set of tickers.
+Pulls price data (yfinance) and recent news for a set of tickers.
 This is the foundation layer everything else (LLM reasoning, signals,
 backtesting) will build on top of.
+
+News source: Alpaca's news API (publisher-tagged by symbol, history back to
+2015 — so it works for backtesting). NewsAPI is kept as an automatic fallback
+for when Alpaca keys aren't set.
 
 Setup:
     pip3 install yfinance requests python-dotenv
 
-    Get a free NewsAPI key at https://newsapi.org/register
-    Then create a .env file in the project root:
+    Alpaca (preferred): create a free account at https://alpaca.markets, then
+    Paper Trading -> API Keys -> Generate. Put both in .env:
+        ALPACA_API_KEY_ID=your_key_id
+        ALPACA_API_SECRET_KEY=your_secret_key
+
+    NewsAPI (fallback): free key at https://newsapi.org/register
         NEWSAPI_KEY=your_key_here
-    (or export NEWSAPI_KEY="your_key_here" in your shell)
 """
 
 import os
 import pandas as pd
 import yfinance as yf
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 
 load_dotenv()  # reads .env in the project root, if present
 
 # ---- Config ----
 TICKERS = ["AAPL", "NVDA", "TSLA"]
-NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "")  # set in .env or your environment
 NEWS_LOOKBACK_DAYS = 3
+
+# Alpaca news (preferred source)
+ALPACA_API_KEY_ID = os.environ.get("ALPACA_API_KEY_ID", "")
+ALPACA_API_SECRET_KEY = os.environ.get("ALPACA_API_SECRET_KEY", "")
+ALPACA_NEWS_URL = "https://data.alpaca.markets/v1beta1/news"
+
+# NewsAPI (fallback source)
+NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "")
 
 # Full company names give NewsAPI far better recall than raw tickers.
 COMPANY_NAMES = {
@@ -98,6 +112,58 @@ def get_price_data(ticker: str, period: str = "1y"):
     }
 
 
+def get_news(ticker, company_name=None, lookback_days=NEWS_LOOKBACK_DAYS,
+             limit=10, start=None, end=None):
+    """Recent news for a ticker. Tries Alpaca first, falls back to NewsAPI.
+
+    Pass explicit `start`/`end` (datetimes) instead of `lookback_days` when
+    pulling point-in-time news for backtesting.
+    """
+    if ALPACA_API_KEY_ID and ALPACA_API_SECRET_KEY:
+        try:
+            # an empty list is a legitimate result for a quiet ticker
+            return _get_news_alpaca(ticker, lookback_days, limit, start, end)
+        except Exception as e:
+            print(f"⚠️  Alpaca news failed for {ticker}: {e} — trying NewsAPI")
+
+    return _get_news_newsapi(ticker, company_name, lookback_days, limit)
+
+
+def _get_news_alpaca(ticker, lookback_days, limit, start=None, end=None):
+    """Fetch symbol-tagged news from Alpaca's news API."""
+    if start is None:
+        start = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+
+    headers = {
+        "APCA-API-KEY-ID": ALPACA_API_KEY_ID,
+        "APCA-API-SECRET-KEY": ALPACA_API_SECRET_KEY,
+    }
+    params = {
+        "symbols": ticker,
+        "start": start.isoformat(),
+        "limit": min(max(limit, 1), 50),
+        "sort": "desc",
+        "exclude_contentless": "true",
+    }
+    if end is not None:
+        params["end"] = end.isoformat()
+
+    resp = requests.get(ALPACA_NEWS_URL, headers=headers, params=params, timeout=15)
+    resp.raise_for_status()
+
+    articles = resp.json().get("news", [])
+    return [
+        {
+            "title": a["headline"],
+            "source": a.get("source") or "Alpaca",
+            "published_at": a.get("updated_at") or a.get("created_at"),
+            "url": a.get("url"),
+            "description": a.get("summary"),
+        }
+        for a in articles
+    ]
+
+
 def _build_news_query(ticker: str, company_name: str = None) -> str:
     """(Apple OR AAPL) AND (stock OR earnings OR analyst OR ...)"""
     name = company_name or COMPANY_NAMES.get(ticker, ticker)
@@ -106,13 +172,14 @@ def _build_news_query(ticker: str, company_name: str = None) -> str:
     return f"{subject} AND ({relevance})"
 
 
-def get_news(ticker: str, company_name: str = None):
+def _get_news_newsapi(ticker, company_name=None, lookback_days=NEWS_LOOKBACK_DAYS,
+                      limit=10):
     """Fetch recent market-relevant news for a ticker/company via NewsAPI."""
     if not NEWSAPI_KEY:
-        print("⚠️  No NEWSAPI_KEY set — skipping news fetch. See setup instructions.")
+        print("⚠️  No Alpaca or NewsAPI credentials set — skipping news. See setup.")
         return []
 
-    from_date = (datetime.now() - timedelta(days=NEWS_LOOKBACK_DAYS)).strftime("%Y-%m-%d")
+    from_date = (datetime.now() - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
 
     url = "https://newsapi.org/v2/everything"
     params = {
@@ -150,7 +217,7 @@ def get_news(ticker: str, company_name: str = None):
                 "description": a.get("description"),
             }
         )
-        if len(results) == 10:
+        if len(results) == limit:
             break
     return results
 
