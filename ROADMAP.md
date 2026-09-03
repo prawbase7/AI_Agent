@@ -25,34 +25,40 @@ a backtest, and the snapshot renders on a public URL.
 
 ---
 
-## Phase 2 — LLM reasoning layer 🚧
+## Phase 2 — LLM reasoning layer ✅
 
-Turn the whole snapshot into one combined market read with per-ticker
-confidence scores, plus a chat box to interrogate it.
+One combined market read with a per-ticker call + confidence score, plus a chat
+that takes a position.
 
-- [x] Output schema (`market_summary`, `top_stories`, `themes`, and per ticker:
-      `stance`, `confidence` 0–1, `rationale`, `key_factors`, `risks`, `catalysts`)
-- [x] Prompt design: feed all price stats + all headlines together, one call,
-      analyst-desk-note framing
-- [x] Model wrapper (`reasoning.py`, Google Gemini free tier, model fallback on 503)
-- [x] Market read + per-ticker read rendered on the page (async, non-blocking)
-- [x] `/api/chat` — streaming chat grounded in the snapshot + read
-- [x] Analysis cached separately from the data snapshot
-- [x] Best-effort: page renders fine when the key is missing or the call fails
+- [x] Output schema — `market_summary`, `top_stories`, `themes`, and per ticker
+      a plain-English walk-through (`what_happened` → `why_it_happened` →
+      `what_could_change` → `todays_move` → `expected_outcome`) + `stance` +
+      `confidence` 0–1
+- [x] Prompt design: all prices + all headlines in one call; opinionated —
+      commits to a direction, magnitude, timeframe, confirm/break levels
+- [x] Model wrapper (`reasoning.py`, Gemini free tier `flash-lite`, retry +
+      fallback model on 5xx)
+- [x] Rebuilt only when `news_fingerprint()` changes → stays inside free quota
+- [x] Runs on a background thread; page + `/api/analysis` never block on it
+- [x] `/api/chat` — streaming, grounded, Markdown, "Toohigh" persona
+- [x] `/api/state` — page refreshes prices + chart + read in place, no reload
+- [x] Best-effort: page renders fine when the key is missing or a call fails
 - [ ] Confidence calibration — track predicted confidence vs realized outcome
+      *(moved to Phase 3 — needs the historical loop)*
 - [ ] Cost/usage logging per call
 
-**Exit criteria:** the page shows a combined market read and a scored, sourced
-thesis per ticker, and the chat can answer questions about them. *(Calibration
-tracking deferred — needs Phase 3's historical loop.)*
+**Exit criteria met:** the live page shows a combined market read and a scored,
+sourced call per ticker, and the chat answers questions about them.
 
 ---
 
-## Phase 3 — Backtesting ⬜
+## Phase 3 — Backtesting 🔜
 
 Check whether the signals would have worked.
 
 - [ ] Historical data loader (point-in-time prices + news, no look-ahead)
+- [ ] Confidence calibration — predicted confidence vs realized outcome (carried
+      over from Phase 2)
 - [ ] Replay engine: walk dates, regenerate signal, simulate a simple rule
       (e.g. long above confidence threshold)
 - [ ] Metrics: total return, Sharpe, max drawdown, hit rate, turnover

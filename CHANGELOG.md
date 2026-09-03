@@ -5,7 +5,8 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 This project is pre-1.0; the API and schema may change between entries.
 
 ## [Unreleased]
-- Phase 2 finish: confidence calibration tracking, per-call usage logging.
+- Phase 3: historical backtesting harness (+ the deferred confidence-calibration
+  tracking and per-call usage logging).
 
 ## [0.2.5] — 2026-09-03
 

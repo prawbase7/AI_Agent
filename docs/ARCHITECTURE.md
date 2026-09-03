@@ -106,11 +106,14 @@ current desk note as JSON, so answers stay grounded. Thinking off for latency.
 - Gunicorn runs `--threads 8` so a slow model call on one thread doesn't stall
   page loads or chat on the others.
 - **View models** (`build_views`): pre-computed display data, never raw frames.
-  - `_sparkline()` — last 30 closes → `"x,y ..."` for an SVG polyline.
+  - `_series()` — full daily close series (up to ~260 pts) for the chart.
   - `_range_position()` — latest close within the 52-week range, 0–100.
 - **Routes:**
-  - `/` — the page
-  - `GET /api/analysis` — desk note as JSON (`status: ok | unavailable | disabled`)
+  - `/` — the page (server-renders the first frame)
+  - `GET /api/state` — prices + chart series + analysis in one payload; the page
+    polls this every 15s and updates the DOM in place (no reload → the chat
+    panel and its history are never touched)
+  - `GET /api/analysis` — just the desk note (`status: ok | pending | unavailable | disabled`)
   - `POST /api/chat` — SSE stream; body `{messages: [{role, content}]}`, history
     capped, grounded in the cached snapshot + analysis
   - `/healthz` — Render health check
@@ -118,10 +121,11 @@ current desk note as JSON, so answers stay grounded. Thinking off for latency.
 ## `templates/index.html`
 
 Single file, no framework, no build. Inline `<style>`, vanilla JS for: the
-refresh countdown, fetching `/api/analysis` and distributing per-ticker reads
-into the cards, and the chat dock (streaming `fetch` + manual SSE parse).
-Renders correctly with any field missing (no news, no sector, no sparkline,
-no analysis).
+interactive price chart (`initChart` per card, exposes `el._updateChart`;
+scrubbing clamped to the plot's vertical band), the self-refresh loop
+(`softRefresh` → `applyState` from `/api/state`), the market-read renderer, and
+the "Toohigh" chat dock (streaming `fetch` + manual SSE parse, persisted to
+`sessionStorage`). Renders correctly with any field missing.
 
 ## Deployment
 

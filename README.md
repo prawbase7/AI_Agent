@@ -1,15 +1,15 @@
 # AI Research Agent
 
 An automated equity-research assistant. It pulls market data and news for a
-watchlist, and is being built up — step by step — into a system that reasons
-over that data with an LLM, backtests the resulting signals, and executes them
-against a paper-trading account.
+watchlist, reasons over it with an LLM that takes a position, and is being built
+up — step by step — toward backtesting those signals and running them against a
+paper-trading account.
 
 **Live demo:** https://ai-research-agent-hup1.onrender.com
 *(free host — first request after idle takes ~30–50s to wake)*
 
-> ⚠️ Educational project. Nothing here is investment advice, and no live money
-> is ever traded.
+> Personal project. The AI analysis is opinionated by design and can be wrong;
+> it's a research aid, not advice, and no live money is traded.
 
 ---
 
@@ -18,8 +18,8 @@ against a paper-trading account.
 | Phase | Scope | State |
 |------:|-------|-------|
 | **1** | Data layer — prices + news, deployed web snapshot | ✅ **Done** |
-| **2** | LLM reasoning layer + chat, with confidence scoring | 🚧 **Mostly done** |
-| **3** | Backtesting harness | ⬜ Planned |
+| **2** | LLM reasoning layer + chat, with confidence scoring | ✅ **Done** |
+| **3** | Backtesting harness | 🔜 Next |
 | **4** | Paper trading via Alpaca | ⬜ Planned |
 
 Full detail and milestones in [ROADMAP.md](ROADMAP.md).
@@ -29,17 +29,20 @@ Change history in [CHANGELOG.md](CHANGELOG.md).
 
 ## What it does today
 
-- Fetches 1 year of daily OHLCV per ticker (`yfinance`) and derives latest close,
-  1-day change, and the true 52-week range.
-- Fetches recent symbol-tagged news (`Alpaca` news API, with `NewsAPI` as an
-  automatic fallback).
+- Fetches 1 year of daily OHLCV per ticker plus today's **intraday** 5-minute
+  bars (`yfinance`), and derives the latest close, 1-day change, and true
+  52-week range.
+- Fetches recent symbol-tagged news (`Alpaca` news API, `NewsAPI` fallback).
 - Sends the whole snapshot to an LLM (`Gemini`) for one combined **market read**:
   what's happening, the top stories ranked by impact, cross-cutting themes, and
-  a per-ticker **stance + confidence score** with factors, risks, and catalysts.
-- Lets you **chat** with that analysis — ask why a name moved, what the risks
-  are — grounded in the same data.
-- Serves it all as a single page — sparklines, a 52-week range meter, a live
-  refresh countdown. Prices render instantly; the analysis loads asynchronously.
+  for each name a plain-English walk-through — what happened → why → what it
+  could change → what the stock did today → **the call on what happens next**,
+  with a **stance + calibrated confidence score**. It commits to a view.
+- **"Toohigh" chat** — ask it anything about the data or the read; it answers
+  short and direct, reasoning from the signals, grounded in the same snapshot.
+- One self-updating page: an interactive price chart (scrub 1D / 1M / 3M / 6M /
+  1Y), the market read, and per-company analysis. It refreshes its own data
+  in place every couple of minutes — no reload, so the chat is never disturbed.
 
 ![UI preview](docs/preview.png)
 
@@ -59,11 +62,11 @@ flowchart LR
     AL --> DS
     NA -.fallback.-> DS
 
-    DS --> APP[app.py\nFlask + caches]
-    DS --> RE[reasoning.py\nGemini: market read\n+ confidence scoring]
+    DS --> APP[app.py\nFlask + threaded caches]
+    DS --> RE[reasoning.py\nGemini: opinionated read\n+ confidence scoring]
     RE --> APP
-    APP --> VIEW[templates/index.html\nsparklines · read · chat]
-    APP --> WEB[(Web page)]
+    APP --> VIEW[templates/index.html\ninteractive chart · read · Toohigh chat]
+    APP --> WEB[(self-updating page)]
     RE -. streaming .-> CHAT[/api/chat/]
 
     RE -.->|phase 3| BT[backtester]
@@ -72,10 +75,10 @@ flowchart LR
 
 | File | Responsibility |
 |------|----------------|
-| [`data_sources.py`](data_sources.py) | All external data. `build_snapshot()` returns `{ticker: {price, news}}`. `get_news()` accepts `start`/`end` for point-in-time (backtest) queries. |
-| [`reasoning.py`](reasoning.py) | The LLM layer. `analyze_market(snapshot)` → combined desk note with per-ticker confidence scores. `chat_stream()` → grounded streaming chat. Best-effort: returns `None` if unconfigured. |
-| [`app.py`](app.py) | Flask app. Separate in-memory caches for the price snapshot and the analysis. Serves `/`, `/api/analysis`, `/api/chat`, `/healthz`. |
-| [`templates/index.html`](templates/index.html) | Single self-contained page — no build step, no JS framework. Fetches analysis and streams chat client-side. |
+| [`data_sources.py`](data_sources.py) | All external data. `build_snapshot()` returns `{ticker: {price, intraday, news}}`. `get_news()` accepts `start`/`end` for point-in-time (backtest) queries. |
+| [`reasoning.py`](reasoning.py) | The LLM layer. `analyze_market(snapshot)` → combined briefing that takes a position, with per-ticker confidence scores. `chat_stream()` → grounded streaming chat. `news_fingerprint()` → skip the call when nothing changed. Best-effort: returns `None` if unconfigured. |
+| [`app.py`](app.py) | Flask app. Independent caches for the price snapshot and the analysis (rebuilt on a background thread). Serves `/`, `/api/state`, `/api/analysis`, `/api/chat`, `/healthz`. |
+| [`templates/index.html`](templates/index.html) | One self-contained page — no build step, no framework. Interactive chart, polls `/api/state` to update in place, streams chat, persists chat to `sessionStorage`. |
 | [`render.yaml`](render.yaml) | Infrastructure-as-code for the Render deployment. |
 
 More design notes in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
