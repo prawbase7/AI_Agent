@@ -7,6 +7,20 @@ This project is pre-1.0; the API and schema may change between entries.
 ## [Unreleased]
 - Phase 2 finish: confidence calibration tracking, per-call usage logging.
 
+## [0.2.5] — 2026-09-03
+
+### Changed
+- Analysis and chat now **take a position**. Prompts reworked to give a
+  directional call, a prediction (direction / magnitude / timeframe / the levels
+  that confirm or break it), and a straight answer when asked "where does this
+  go" — reasoning from the signals like someone with money on the line, instead
+  of hedging. Still strictly grounded in the supplied prices + news; speculation
+  beyond the data shows up as lower confidence, not vaguer wording.
+- Intraday chart labels carry the timezone: `1:20 PM ET` (US Eastern — the
+  exchange timezone for these names). Footer notes `TIMES · ET`.
+- Footer disclaimer trimmed to a factual caveat (AI reasons from the data shown
+  and can be wrong) rather than a blanket "not investment advice".
+
 ## [0.2.4] — 2026-09-03
 
 ### Changed
