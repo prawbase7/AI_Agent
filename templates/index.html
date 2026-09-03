@@ -354,7 +354,7 @@
       <span class="eyebrow"><span class="pulse"></span> Live Feed</span>
       <h1>AI Research Agent</h1>
       <div class="meta">
-        SNAPSHOT <b>{{ fetched_at.strftime("%Y-%m-%d %H:%M:%S UTC") }}</b>
+        SNAPSHOT <b id="snap-time">{{ fetched_at.strftime("%Y-%m-%d %H:%M:%S UTC") }}</b>
         &nbsp;·&nbsp; re-scans every {{ (refresh_secs / 60)|round(1) }} min, analysis rebuilds on new news
         &nbsp;·&nbsp; next scan <b id="countdown">{{ "%d:%02d"|format(next_refresh // 60, next_refresh % 60) }}</b>
       </div>
@@ -479,115 +479,190 @@
   {% endif %}
 
   <script>
-    // ---- refresh countdown ----
-    (function () {
-      var el = document.getElementById("countdown");
-      var left = {{ next_refresh }};
-      setInterval(function () {
-        left -= 1;
-        if (left <= 0) { location.reload(); return; }
-        var m = Math.floor(left / 60), s = left % 60;
-        el.textContent = m + ":" + (s < 10 ? "0" : "") + s;
-      }, 1000);
-    })();
+    var MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    function fmtLabel(s) {
+      // daily keys look like "2026-09-03"; intraday keys like "9:30 AM"
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        var p = s.split("-");
+        return MONTHS[+p[1] - 1] + " " + (+p[2]) + ", " + p[0];
+      }
+      return s;
+    }
 
     // ---- interactive price charts ----
-    (function () {
+    function initChart(el) {
       var PAD = 8;
-      var MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-      function fmtLabel(s) {
-        if (/^\d{2}:\d{2}$/.test(s)) return s;                 // intraday "HH:MM"
-        var p = s.split("-");
-        return MONTHS[+p[1] - 1] + " " + (+p[2]) + ", " + p[0]; // daily "YYYY-MM-DD"
+      var daily, intra = null;
+      try { daily = JSON.parse(el.getAttribute("data-series")); } catch (_) { return; }
+      if (!daily || !daily.c || daily.c.length < 2) return;
+      try { intra = JSON.parse(el.getAttribute("data-intraday")); } catch (_) {}
+      var stroke = el.getAttribute("data-up") === "1" ? "#17e6a1" : "#ff5c72";
+
+      var svg = el.querySelector(".chart-svg");
+      var plot = el.querySelector(".chart-plot");
+      var cursor = el.querySelector(".chart-cursor");
+      var crPrice = el.querySelector(".cr-price");
+      var crDate = el.querySelector(".cr-date");
+      var latestPrice = crPrice.textContent, latestDate = "latest";
+      var view = { t: [], c: [], xs: [], ys: [], intraday: false };
+      var dragging = false;
+
+      function currentMode() {
+        var b = el.querySelector(".chart-ranges button.on");
+        return b ? b.getAttribute("data-r") : "30";
       }
 
-      document.querySelectorAll(".chart").forEach(function (el) {
-        var daily, intra = null;
-        try { daily = JSON.parse(el.getAttribute("data-series")); } catch (_) { return; }
-        if (!daily || !daily.c || daily.c.length < 2) return;
-        try { intra = JSON.parse(el.getAttribute("data-intraday")); } catch (_) {}
-        var up = el.getAttribute("data-up") === "1";
-        var stroke = up ? "#17e6a1" : "#ff5c72";
-
-        var svg = el.querySelector(".chart-svg");
-        var plot = el.querySelector(".chart-plot");
-        var cursor = el.querySelector(".chart-cursor");
-        var crPrice = el.querySelector(".cr-price");
-        var crDate = el.querySelector(".cr-date");
-        var latestPrice = crPrice.textContent, latestDate = crDate.textContent;
-        var view = { t: [], c: [], xs: [], ys: [], intraday: false };
-
-        function draw(mode) {
-          var c, t, isIntra = mode === "intraday";
-          if (isIntra && intra && intra.c && intra.c.length > 1) {
-            c = intra.c.slice(); t = intra.t.slice();
-          } else {
-            isIntra = false;
-            var days = +mode;
-            var start = days > 0 ? Math.max(0, daily.c.length - days) : 0;
-            c = daily.c.slice(start); t = daily.t.slice(start);
-          }
-          var lo = Math.min.apply(null, c), hi = Math.max.apply(null, c);
-          var span = (hi - lo) || 1, n = c.length;
-          var xs = [], ys = [], pts = [];
-          for (var i = 0; i < n; i++) {
-            var x = n === 1 ? 0 : (i / (n - 1)) * 100;
-            var y = PAD + (100 - 2 * PAD) * (1 - (c[i] - lo) / span);
-            xs.push(x); ys.push(y); pts.push(x.toFixed(2) + "," + y.toFixed(2));
-          }
-          var d = pts.join(" ");
-          svg.innerHTML =
-            '<defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">'
-            + '<stop offset="0%" stop-color="' + stroke + '" stop-opacity="0.28"/>'
-            + '<stop offset="100%" stop-color="' + stroke + '" stop-opacity="0"/>'
-            + '</linearGradient></defs>'
-            + '<polygon points="0,100 ' + d + ' 100,100" fill="url(#cg)"/>'
-            + '<polyline points="' + d + '" fill="none" stroke="' + stroke
-            + '" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>';
-          view = { t: t, c: c, xs: xs, ys: ys, intraday: isIntra };
-          reset();
+      function draw(mode) {
+        var c, t, isIntra = mode === "intraday";
+        if (isIntra && intra && intra.c && intra.c.length > 1) {
+          c = intra.c.slice(); t = intra.t.slice();
+        } else {
+          isIntra = false;
+          var days = +mode;
+          var start = days > 0 ? Math.max(0, daily.c.length - days) : 0;
+          c = daily.c.slice(start); t = daily.t.slice(start);
         }
-
-        function reset() {
-          cursor.hidden = true;
-          crPrice.textContent = latestPrice;
-          crDate.textContent = view.intraday && intra ? "today · " + intra.day : latestDate;
-          var old = el.querySelector(".cr-chg"); if (old) old.remove();
+        var lo = Math.min.apply(null, c), hi = Math.max.apply(null, c);
+        var span = (hi - lo) || 1, n = c.length;
+        var xs = [], ys = [], pts = [];
+        for (var i = 0; i < n; i++) {
+          var x = n === 1 ? 0 : (i / (n - 1)) * 100;
+          var y = PAD + (100 - 2 * PAD) * (1 - (c[i] - lo) / span);
+          xs.push(x); ys.push(y); pts.push(x.toFixed(2) + "," + y.toFixed(2));
         }
+        var d = pts.join(" ");
+        svg.innerHTML =
+          '<defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">'
+          + '<stop offset="0%" stop-color="' + stroke + '" stop-opacity="0.28"/>'
+          + '<stop offset="100%" stop-color="' + stroke + '" stop-opacity="0"/>'
+          + '</linearGradient></defs>'
+          + '<polygon points="0,100 ' + d + ' 100,100" fill="url(#cg)"/>'
+          + '<polyline points="' + d + '" fill="none" stroke="' + stroke
+          + '" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>';
+        view = { t: t, c: c, xs: xs, ys: ys, intraday: isIntra };
+        reset();
+      }
 
-        function moveTo(clientX) {
-          var r = plot.getBoundingClientRect();
-          var frac = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
-          var i = Math.round(frac * (view.c.length - 1));
-          cursor.hidden = false;
-          cursor.style.left = view.xs[i] + "%";
-          cursor.style.setProperty("--cy", view.ys[i] + "%");
-          var price = view.c[i], base = view.c[0];
-          var chg = base ? ((price - base) / base) * 100 : 0;
-          crPrice.textContent = "$" + price.toFixed(2);
-          crDate.textContent = fmtLabel(view.t[i]);
-          var tag = el.querySelector(".cr-chg");
-          if (!tag) { tag = document.createElement("span"); tag.className = "cr-chg"; el.querySelector(".chart-readout").appendChild(tag); }
-          tag.className = "cr-chg " + (chg >= 0 ? "up" : "down");
-          tag.textContent = (chg >= 0 ? "+" : "") + chg.toFixed(2) + (view.intraday ? "% today" : "% over range");
-        }
+      function reset() {
+        dragging = false;
+        cursor.hidden = true;
+        crPrice.textContent = latestPrice;
+        crDate.textContent = view.intraday && intra ? "today · " + intra.day : latestDate;
+        var old = el.querySelector(".cr-chg"); if (old) old.remove();
+      }
 
-        plot.addEventListener("pointermove", function (e) { moveTo(e.clientX); });
-        plot.addEventListener("pointerdown", function (e) { plot.setPointerCapture(e.pointerId); moveTo(e.clientX); });
-        plot.addEventListener("pointerup", reset);
-        plot.addEventListener("pointerleave", reset);
+      function moveTo(clientX) {
+        var r = plot.getBoundingClientRect();
+        var frac = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+        var i = Math.round(frac * (view.c.length - 1));
+        cursor.hidden = false;
+        cursor.style.left = view.xs[i] + "%";
+        cursor.style.setProperty("--cy", view.ys[i] + "%");
+        var price = view.c[i], base = view.c[0];
+        var chg = base ? ((price - base) / base) * 100 : 0;
+        crPrice.textContent = "$" + price.toFixed(2);
+        crDate.textContent = fmtLabel(view.t[i]);
+        var tag = el.querySelector(".cr-chg");
+        if (!tag) { tag = document.createElement("span"); tag.className = "cr-chg"; el.querySelector(".chart-readout").appendChild(tag); }
+        tag.className = "cr-chg " + (chg >= 0 ? "up" : "down");
+        tag.textContent = (chg >= 0 ? "+" : "") + chg.toFixed(2) + (view.intraday ? "% today" : "% over range");
+      }
 
-        el.querySelectorAll(".chart-ranges button").forEach(function (b) {
-          b.addEventListener("click", function () {
-            el.querySelectorAll(".chart-ranges button").forEach(function (x) { x.classList.remove("on"); });
-            b.classList.add("on");
-            draw(b.getAttribute("data-r"));
-          });
-        });
-
-        draw(el.querySelector(".chart-ranges button.on").getAttribute("data-r"));
+      // scrubbing only works while the pointer is over the plot area — drop
+      // below the chart baseline and it stops.
+      function withinBand(e) {
+        var r = plot.getBoundingClientRect();
+        return e.clientY >= r.top - 6 && e.clientY <= r.bottom + 2;
+      }
+      plot.addEventListener("pointerdown", function (e) {
+        if (!withinBand(e)) return;
+        dragging = true;
+        try { plot.setPointerCapture(e.pointerId); } catch (_) {}
+        moveTo(e.clientX);
       });
-    })();
+      plot.addEventListener("pointermove", function (e) {
+        if (!dragging && e.pointerType === "mouse") { if (withinBand(e)) moveTo(e.clientX); return; }
+        if (!dragging) return;
+        if (!withinBand(e)) { reset(); return; }
+        moveTo(e.clientX);
+      });
+      plot.addEventListener("pointerup", reset);
+      plot.addEventListener("pointercancel", reset);
+      plot.addEventListener("pointerleave", function (e) { if (e.pointerType === "mouse") reset(); });
+
+      el.querySelectorAll(".chart-ranges button").forEach(function (b) {
+        b.addEventListener("click", function () {
+          el.querySelectorAll(".chart-ranges button").forEach(function (x) { x.classList.remove("on"); });
+          b.classList.add("on");
+          draw(b.getAttribute("data-r"));
+        });
+      });
+
+      draw(currentMode());
+
+      // called by softRefresh() with fresh data — keeps the selected range
+      el._updateChart = function (newDaily, newIntra, up) {
+        if (newDaily && newDaily.c && newDaily.c.length > 1) daily = newDaily;
+        intra = newIntra || null;
+        stroke = up ? "#17e6a1" : "#ff5c72";
+        crPrice.style.color = "";
+        var mode = currentMode();
+        if (mode === "intraday" && !intra) {
+          el.querySelector('.chart-ranges button[data-r="intraday"]').classList.remove("on");
+          el.querySelector('.chart-ranges button[data-r="30"]').classList.add("on");
+          mode = "30";
+        }
+        latestPrice = "$" + (mode === "intraday" && intra
+          ? intra.c[intra.c.length - 1] : daily.c[daily.c.length - 1]).toFixed(2);
+        draw(mode);
+      };
+    }
+    document.querySelectorAll(".chart").forEach(initChart);
+
+    // ---- soft refresh (no page reload — the chat panel is never touched) ----
+    var countdownEl = document.getElementById("countdown");
+    var snapTimeEl = document.getElementById("snap-time");
+    var secsLeft = {{ next_refresh }};
+
+    function paintCountdown() {
+      var m = Math.floor(Math.max(0, secsLeft) / 60), s = Math.max(0, secsLeft) % 60;
+      countdownEl.textContent = m + ":" + (s < 10 ? "0" : "") + s;
+    }
+
+    function applyState(st) {
+      if (st.fetched_at) snapTimeEl.textContent = st.fetched_at;
+      if (typeof st.next_refresh === "number") { secsLeft = st.next_refresh; paintCountdown(); }
+      (st.tickers || []).forEach(function (t) {
+        var card = document.querySelector('.card[data-ticker="' + t.ticker + '"]');
+        if (!card) return;
+        if (t.latest_close != null)
+          card.querySelector(".price").textContent = "$" + t.latest_close.toFixed(2);
+        var delta = card.querySelector(".delta");
+        if (delta && t.pct_change_1d != null) {
+          var upd = t.pct_change_1d >= 0;
+          delta.className = "delta " + (upd ? "up" : "down");
+          delta.textContent = (upd ? "▲ +" : "▼ ") + t.pct_change_1d + "% · 1D";
+        }
+        var chart = card.querySelector(".chart");
+        if (chart && chart._updateChart) chart._updateChart(t.series, t.intraday, t.spark_up);
+        var dot = card.querySelector(".range-dot");
+        if (dot && t.range_pos != null) dot.style.left = t.range_pos.toFixed(1) + "%";
+      });
+      {% if analysis_enabled %}if (st.analysis) renderRead(st.analysis);{% endif %}
+    }
+
+    function softRefresh() {
+      fetch("/api/state").then(function (r) { return r.json(); })
+        .then(applyState).catch(function () {});
+    }
+
+    setInterval(function () {
+      secsLeft -= 1;
+      paintCountdown();
+      if (secsLeft <= -2) secsLeft = {{ refresh_secs }};   // safety reset
+    }, 1000);
+    setInterval(softRefresh, 15000);   // pick up new prices + analysis, no reload
+    softRefresh();
 
     {% if analysis_enabled %}
     // ---- market read ----
@@ -658,22 +733,10 @@
       });
     }
 
-    // the analysis builds on a background thread; poll until it's ready.
-    (function loadRead(tries) {
-      fetch("/api/analysis")
-        .then(function (r) { return r.json(); })
-        .then(function (a) {
-          if (a && a.status === "ok") { renderRead(a); return; }
-          renderRead(a);  // shows "building…" / "retrying" note
-          if (tries > 0) setTimeout(function () { loadRead(tries - 1); }, 5000);
-        })
-        .catch(function () {
-          if (tries > 0) setTimeout(function () { loadRead(tries - 1); }, 5000);
-          else renderRead({ status: "unavailable" });
-        });
-    })(30);
+    // analysis is refreshed by softRefresh(); show the "building…" note until then
+    renderRead({ status: "pending" });
 
-    // ---- chat ----
+    // ---- chat (state persists across the soft refresh AND a hard reload) ----
     var chat = document.getElementById("chat");
     var openBtn = document.getElementById("chat-open");
     var closeBtn = document.getElementById("chat-close");
@@ -683,8 +746,22 @@
     var send = document.getElementById("chat-send");
     var convo = [];  // NB: don't name this `history` — collides with window.history
 
-    openBtn.addEventListener("click", function () { chat.hidden = false; openBtn.hidden = true; input.focus(); });
-    closeBtn.addEventListener("click", function () { chat.hidden = true; openBtn.hidden = false; });
+    function saveChat() {
+      try {
+        sessionStorage.setItem("toohigh_chat", JSON.stringify({ convo: convo, open: !chat.hidden }));
+      } catch (_) {}
+    }
+    function restoreChat() {
+      var raw;
+      try { raw = JSON.parse(sessionStorage.getItem("toohigh_chat")); } catch (_) {}
+      if (!raw || !raw.convo || !raw.convo.length) return;
+      convo = raw.convo;
+      convo.forEach(function (m) { addMsg(m.role === "user" ? "user" : "bot", m.content); });
+      if (raw.open) { chat.hidden = false; openBtn.hidden = true; }
+    }
+
+    openBtn.addEventListener("click", function () { chat.hidden = false; openBtn.hidden = true; input.focus(); saveChat(); });
+    closeBtn.addEventListener("click", function () { chat.hidden = true; openBtn.hidden = false; saveChat(); });
 
     // tiny, safe Markdown: escape first, then apply a few inline/block rules
     function md(src) {
@@ -749,6 +826,7 @@
         bot.classList.remove("pending");
         if (!acc) setBot(bot, "_(no response — try again)_");
         convo.push({ role: "assistant", content: acc });
+        saveChat();
         send.disabled = false;
         input.focus();
       }
@@ -785,6 +863,8 @@
         send.disabled = false;
       });
     });
+
+    restoreChat();
     {% endif %}
   </script>
 </body>

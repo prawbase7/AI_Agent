@@ -7,6 +7,18 @@ This project is pre-1.0; the API and schema may change between entries.
 ## [Unreleased]
 - Phase 2 finish: confidence calibration tracking, per-call usage logging.
 
+## [0.2.4] — 2026-09-03
+
+### Changed
+- **The page no longer reloads to refresh.** New `GET /api/state` returns prices,
+  chart series, and the analysis in one payload; the browser polls it every 15s
+  and updates the cards, charts, and market read in place. The chat panel and
+  its history are never touched by a data refresh.
+- Chat history also persists across a manual reload (sessionStorage).
+- Intraday chart labels are 12-hour (`9:30 AM` … `3:55 PM`).
+- Chart scrubbing is bounded to the plot area — drag below the chart baseline
+  and it stops, instead of continuing to track.
+
 ## [0.2.3] — 2026-09-03
 
 ### Added

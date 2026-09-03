@@ -157,13 +157,46 @@ def index():
     )
 
 
-@app.route("/api/analysis")
-def api_analysis():
+def _analysis_payload():
     status, data = get_analysis_state()
     if status != "ok":
         return {"status": status}
     payload = {k: v for k, v in data.items() if k != "by_ticker"}
     payload["status"] = "ok"
+    return payload
+
+
+@app.route("/api/analysis")
+def api_analysis():
+    return Response(json.dumps(_analysis_payload(), default=str),
+                    mimetype="application/json")
+
+
+@app.route("/api/state")
+def api_state():
+    """Everything the page needs to refresh in place — no reload, so the chat
+    panel and its history are never touched."""
+    data, fetched_at = get_snapshot()
+    tickers = []
+    for v in build_views(data):
+        p = v["price"]
+        tickers.append({
+            "ticker": v["ticker"],
+            "latest_close": p.get("latest_close"),
+            "pct_change_1d": p.get("pct_change_1d"),
+            "w52_low": p.get("52w_low"),
+            "w52_high": p.get("52w_high"),
+            "range_pos": v["range_pos"],
+            "spark_up": v["spark_up"],
+            "series": v["series"],
+            "intraday": v["intraday"],
+        })
+    payload = {
+        "fetched_at": fetched_at.strftime("%Y-%m-%d %H:%M:%S UTC"),
+        "next_refresh": int(max(0, SNAPSHOT_TTL - (time.time() - _snap["at"]))),
+        "tickers": tickers,
+        "analysis": _analysis_payload(),
+    }
     return Response(json.dumps(payload, default=str), mimetype="application/json")
 
 

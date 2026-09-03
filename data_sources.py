@@ -129,7 +129,8 @@ def get_intraday(ticker: str):
         if len(day) < 2:
             return None
         return {
-            "t": [ts.strftime("%H:%M") for ts in day.index],
+            # 12-hour labels, e.g. "9:30 AM", "3:55 PM"
+            "t": [ts.strftime("%I:%M %p").lstrip("0") for ts in day.index],
             "c": [round(float(c), 2) for c in day["Close"].tolist()],
             "day": last_day.strftime("%Y-%m-%d"),
         }
