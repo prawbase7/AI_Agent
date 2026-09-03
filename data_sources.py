@@ -21,6 +21,7 @@ Setup:
         NEWSAPI_KEY=your_key_here
 """
 
+import html
 import os
 import pandas as pd
 import yfinance as yf
@@ -112,6 +113,31 @@ def get_price_data(ticker: str, period: str = "1y"):
     }
 
 
+def get_intraday(ticker: str):
+    """Most recent trading session as intraday 5-minute bars.
+
+    Returns {"t": ["09:30", ...], "c": [...], "day": "YYYY-MM-DD"} or None.
+    Uses a 5-day / 5-minute pull and keeps the last day present, so it still
+    works before the open, on weekends, and on holidays.
+    """
+    try:
+        df = yf.Ticker(ticker).history(period="5d", interval="5m")
+        if df.empty:
+            return None
+        last_day = df.index[-1].date()
+        day = df[df.index.map(lambda ts: ts.date() == last_day)]
+        if len(day) < 2:
+            return None
+        return {
+            "t": [ts.strftime("%H:%M") for ts in day.index],
+            "c": [round(float(c), 2) for c in day["Close"].tolist()],
+            "day": last_day.strftime("%Y-%m-%d"),
+        }
+    except Exception as e:  # noqa: BLE001 — intraday is a nice-to-have
+        print(f"⚠️  intraday fetch failed for {ticker}: {e}")
+        return None
+
+
 def get_news(ticker, company_name=None, lookback_days=NEWS_LOOKBACK_DAYS,
              limit=10, start=None, end=None):
     """Recent news for a ticker. Tries Alpaca first, falls back to NewsAPI.
@@ -154,11 +180,11 @@ def _get_news_alpaca(ticker, lookback_days, limit, start=None, end=None):
     articles = resp.json().get("news", [])
     return [
         {
-            "title": a["headline"],
+            "title": html.unescape(a["headline"] or ""),
             "source": (a.get("source") or "Alpaca").title(),
             "published_at": a.get("updated_at") or a.get("created_at"),
             "url": a.get("url"),
-            "description": a.get("summary"),
+            "description": html.unescape(a.get("summary") or "") or None,
         }
         for a in articles
     ]
@@ -210,11 +236,11 @@ def _get_news_newsapi(ticker, company_name=None, lookback_days=NEWS_LOOKBACK_DAY
         seen_titles.add(title.lower())
         results.append(
             {
-                "title": title,
+                "title": html.unescape(title),
                 "source": a["source"]["name"],
                 "published_at": a["publishedAt"],
                 "url": a["url"],
-                "description": a.get("description"),
+                "description": html.unescape(a.get("description") or "") or None,
             }
         )
         if len(results) == limit:
@@ -223,15 +249,14 @@ def _get_news_newsapi(ticker, company_name=None, lookback_days=NEWS_LOOKBACK_DAY
 
 
 def build_snapshot(tickers=TICKERS):
-    """Pull price + news data for each ticker into one combined snapshot."""
+    """Pull price + intraday + news data for each ticker into one snapshot."""
     snapshot = {}
     for ticker in tickers:
         print(f"Fetching data for {ticker}...")
-        price_data = get_price_data(ticker)
-        news_data = get_news(ticker, COMPANY_NAMES.get(ticker))
         snapshot[ticker] = {
-            "price": price_data,
-            "news": news_data,
+            "price": get_price_data(ticker),
+            "intraday": get_intraday(ticker),
+            "news": get_news(ticker, COMPANY_NAMES.get(ticker)),
         }
     return snapshot
 

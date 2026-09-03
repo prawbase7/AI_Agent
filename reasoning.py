@@ -254,57 +254,52 @@ def analyze_market(snapshot: dict, model: str = None):
     return data
 
 
-def _analysis_for_chat(analysis: dict) -> str:
-    """Compact text version of the briefing for the chat system prompt."""
-    if not analysis:
-        return "No desk briefing is available right now."
-    out = ["DESK BRIEFING (what the on-screen analysis says):",
-           f"Market summary: {analysis.get('market_summary', '')}"]
-    for s in analysis.get("top_stories", []):
-        out.append(f"- TOP STORY ({s.get('impact')}): {s.get('headline')} — "
-                   f"{s.get('why_it_matters')}")
-    for t in analysis.get("tickers", []):
-        out.append(
-            f"\n{t.get('ticker')} — stance {t.get('stance')} "
-            f"(confidence {t.get('confidence')})\n"
-            f"  What happened: {t.get('what_happened')}\n"
-            f"  Why: {t.get('why_it_happened')}\n"
-            f"  Could change: {t.get('what_could_change')}\n"
-            f"  Today's move: {t.get('todays_move')}\n"
-            f"  Expected next: {t.get('expected_outcome')}"
-        )
-    return "\n".join(out)
+def _chat_context(snapshot: dict, analysis: dict) -> str:
+    """A SMALL context block for chat — kept tight so replies come back fast."""
+    lines = []
+    for ticker, d in snapshot.items():
+        p = d.get("price", {})
+        close, chg = p.get("latest_close"), p.get("pct_change_1d")
+        head = f"{ticker}: ${close:.2f}" if close else f"{ticker}:"
+        if chg is not None:
+            head += f" ({chg:+.2f}% today)"
+        lines.append(head)
+        for a in (d.get("news") or [])[:6]:
+            lines.append(f"  news: {a['title']}")
+    ctx = "PRICES + HEADLINES:\n" + "\n".join(lines)
+
+    if analysis:
+        ctx += "\n\nMY READ:\n" + analysis.get("market_summary", "")
+        for t in analysis.get("tickers", []):
+            ctx += (f"\n{t.get('ticker')}: {t.get('stance')} "
+                    f"({t.get('confidence')}) — {t.get('headline_read', '')} "
+                    f"{t.get('what_happened', '')}")
+    return ctx
 
 
-_CHAT_SYSTEM = """You are the analyst behind the "AI Research Agent" dashboard, \
-now chatting with the person who uses it. They are looking at a page that shows, \
-for a few technology stocks: the latest price and move, a news feed (from Alpaca \
-and Yahoo Finance), and your written briefing on each name.
+_CHAT_SYSTEM = """You are Toohigh, an AI research agent. You're chatting with the \
+person using your dashboard — they can see live prices, a news feed, and your \
+market read for a few tech stocks. That data is given to you below.
 
-You are given that exact data and your own briefing below. Answer their questions \
-from it:
-- Explain in plain, easy language — like a helpful chat assistant, not a report.
-- Be short. A few sentences or a tight bullet list. Expand only if asked.
-- When it helps, say where something comes from ("the Alpaca news feed says…", \
-"your briefing rates NVDA bullish because…").
-- If the data on screen doesn't answer it, say so plainly and give your best \
-general read, flagged as such.
-- Never give personalised investment advice or tell them to buy or sell.
+How you talk:
+- Short. Straight answers. 1-3 sentences, like a normal text conversation.
+- No preamble, no "great question", no sign-off, no bullet-point essays.
+- Plain words. If they want more detail they'll ask.
+- If the data doesn't cover it, say so in one line and give a quick take.
+- Never tell them to buy or sell.
 
-You may use light Markdown: **bold**, bullet lists with "- ", and short paragraphs."""
+If someone just greets you, reply exactly: "Hello, my name is Toohigh and I am an \
+AI agent for research. Ask me anything about what's on screen."
+"""
 
 
 def chat_stream(messages: list, snapshot: dict, analysis: dict = None,
                 model: str = None):
-    """Yield response text chunks for a chat turn, grounded in the snapshot +
-    the current briefing. `messages` is [{"role": "user"|"assistant", "content"}]."""
+    """Yield response text chunks for a chat turn, grounded in a small context
+    block. `messages` is [{"role": "user"|"assistant", "content"}]."""
     from google.genai import types
 
-    system = (
-        _CHAT_SYSTEM
-        + "\n\n=== LIVE DATA ON SCREEN ===\n" + build_context(snapshot)
-        + "\n\n=== " + _analysis_for_chat(analysis)
-    )
+    system = _CHAT_SYSTEM + "\n\n=== LIVE DATA ===\n" + _chat_context(snapshot, analysis)
 
     contents = [
         types.Content(
@@ -322,7 +317,7 @@ def chat_stream(messages: list, snapshot: dict, analysis: dict = None,
                 config=types.GenerateContentConfig(
                     system_instruction=system,
                     thinking_config=types.ThinkingConfig(thinking_budget=0),
-                    max_output_tokens=2000,
+                    max_output_tokens=600,
                     temperature=0.5,
                 ),
             )

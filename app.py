@@ -132,6 +132,7 @@ def build_views(data):
                 "spark_up": (p.get("pct_change_1d") or 0) >= 0,
                 "range_pos": _range_position(p),
                 "series": _series(p.get("history")),
+                "intraday": d.get("intraday"),
             }
         )
     return views

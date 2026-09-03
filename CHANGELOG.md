@@ -7,6 +7,24 @@ This project is pre-1.0; the API and schema may change between entries.
 ## [Unreleased]
 - Phase 2 finish: confidence calibration tracking, per-call usage logging.
 
+## [0.2.3] — 2026-09-03
+
+### Added
+- **1D intraday** on the price chart — today's session as 5-minute bars
+  (`get_intraday()`, a 5-day/5-min pull kept to the last session so it works
+  pre-open and on weekends). New default view; scrub shows the time + price.
+
+### Changed
+- Chat is now **"Toohigh"** — renamed throughout; greets with
+  "Hello, my name is Toohigh and I am an AI agent for research."
+- Chat answers are short and direct — reworked system prompt (1-3 sentences,
+  no preamble, no bullet essays), `max_output_tokens` 2000 → 600.
+- Chat context trimmed to a compact block (prices + headline titles + a one-line
+  read per ticker) instead of the full news bodies and full briefing JSON —
+  fewer input tokens, faster replies. (Free-tier latency still varies 1-15s.)
+- Removed the example-prompt hint line under the chat.
+- News titles/summaries are HTML-unescaped (`Storage &amp;` → `Storage &`).
+
 ## [0.2.2] — 2026-09-03
 
 ### Fixed
