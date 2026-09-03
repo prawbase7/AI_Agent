@@ -8,6 +8,22 @@ This project is pre-1.0; the API and schema may change between entries.
 - Phase 3: historical backtesting harness (+ the deferred confidence-calibration
   tracking and per-call usage logging).
 
+## [0.2.6] — 2026-09-03
+
+### Fixed / mobile
+- Readable on phones: 16px base text (also stops iOS zooming the page when the
+  chat input is focused), the tiny monospace labels bumped up, tighter page
+  padding, the header's long explainer hidden on narrow screens.
+- Chat is genuinely full-screen on a phone (`100dvh`, safe-area padding) with
+  larger message text.
+- **Enter always sends** in the chat — explicit key handler plus
+  `enterkeyhint="send"`, so mobile keyboards submit instead of doing nothing.
+
+### Fixed / polish
+- A background data refresh no longer yanks the chart mid-scrub, and the market
+  read only re-renders when the analysis actually changes (was rebuilding every
+  15s). A transient analysis blip keeps the last good read on screen.
+
 ## [0.2.5] — 2026-09-03
 
 ### Changed

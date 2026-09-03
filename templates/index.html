@@ -323,24 +323,61 @@
     .chat-hint { font-family: var(--mono); font-size: .72rem; color: var(--dim); padding: 0 1rem .4rem; }
     .chat-form { display: flex; gap: .5rem; padding: .8rem 1rem 1rem; border-top: 1px solid var(--border); }
     .chat-form input {
-      flex: 1; background: rgba(255,255,255,.04); border: 1px solid var(--border);
+      flex: 1; min-width: 0; background: rgba(255,255,255,.04); border: 1px solid var(--border);
       border-radius: 10px; padding: .6rem .8rem; color: var(--text);
-      font-family: var(--sans); font-size: .9rem; outline: none;
+      font-family: var(--sans); font-size: 16px; outline: none;  /* 16px: no iOS zoom */
     }
     .chat-form input:focus { border-color: var(--accent); }
     .chat-form button {
       border: none; border-radius: 10px; padding: 0 1rem; cursor: pointer;
-      font-family: var(--mono); font-size: .8rem; color: #fff;
+      font-family: var(--mono); font-size: .8rem; color: #fff; flex-shrink: 0;
       background: linear-gradient(120deg, var(--accent), var(--accent-2));
     }
     .chat-form button:disabled { opacity: .5; cursor: not-allowed; }
 
-    @media (max-width: 480px) {
-      body { padding-top: 2.5rem; }
-      .price { font-size: 1.3rem; }
-      .ticker { font-size: 1.15rem; }
-      .chat { right: 0; bottom: 0; width: 100vw; height: 82vh; border-radius: 18px 18px 0 0; }
-      .chat-toggle { right: 1rem; bottom: 1rem; }
+    /* ---------- phones ---------- */
+    @media (max-width: 560px) {
+      body { padding: 2rem .85rem 6rem; font-size: 16px; }
+      .wrap { max-width: 100%; }
+      h1 { font-size: 1.9rem; }
+      .meta { font-size: .8rem; line-height: 1.7; }
+      .meta .m-hide { display: none; }          /* drop the long explainer */
+
+      .card { padding: 1.15rem 1.1rem; border-radius: 15px; }
+      .ticker { font-size: 1.2rem; }
+      .price { font-size: 1.35rem; }
+      .delta { font-size: .82rem; }
+      .chip { font-size: .68rem; }
+
+      /* bump the small mono labels so they're legible */
+      .read-card .kicker, .stories h3, .news-head,
+      .tread-head .stance, .tread .block h4 { font-size: .72rem; }
+      .read-card .summary { font-size: 1rem; }
+      .theme, .story .h, .news a { font-size: .95rem; }
+      .story .w, .tread .block p, .tread .lede { font-size: .93rem; }
+      .news .src, .conf-label, .read-stamp, .cr-date { font-size: .72rem; }
+      .itag { font-size: .66rem; }
+      footer { font-size: .74rem; }
+
+      .cr-price { font-size: 1.1rem; }
+      .chart-plot { height: 104px; }
+      .chart-ranges button { font-size: .78rem; padding: .35rem .7rem; }
+
+      /* full-screen chat that plays nice with the on-screen keyboard */
+      .chat {
+        right: 0; left: 0; bottom: 0; top: auto;
+        width: 100%; height: 100vh; height: 100dvh; max-height: 100dvh; border-radius: 0;
+      }
+      .chat-head { padding: 1rem; }
+      .chat-head .t { font-size: .9rem; }
+      .chat-head button { font-size: 1.6rem; padding: .2rem .5rem; }
+      .chat-log { padding: 1rem .9rem; gap: 1rem; }
+      .msg { font-size: 15px; }
+      .msg .who { font-size: .64rem; }
+      .msg.bot code { font-size: .86rem; }
+      .chat-form { padding: .75rem .9rem calc(.9rem + env(safe-area-inset-bottom)); }
+      .chat-form button { padding: 0 1.1rem; font-size: .85rem; }
+      .chat-toggle { right: 1rem; bottom: calc(1rem + env(safe-area-inset-bottom)); font-size: .82rem; padding: .75rem 1.15rem; }
     }
     @media (prefers-reduced-motion: reduce) {
       .card { animation: none; opacity: 1; transform: none; }
@@ -355,7 +392,7 @@
       <h1>AI Research Agent</h1>
       <div class="meta">
         SNAPSHOT <b id="snap-time">{{ fetched_at.strftime("%Y-%m-%d %H:%M:%S UTC") }}</b>
-        &nbsp;·&nbsp; re-scans every {{ (refresh_secs / 60)|round(1) }} min, analysis rebuilds on new news
+        <span class="m-hide">&nbsp;·&nbsp; re-scans every {{ (refresh_secs / 60)|round(1) }} min, analysis rebuilds on new news</span>
         &nbsp;·&nbsp; next scan <b id="countdown">{{ "%d:%02d"|format(next_refresh // 60, next_refresh % 60) }}</b>
       </div>
     </header>
@@ -473,8 +510,10 @@
       <div class="msg bot"><span class="who">Toohigh</span>Hello, my name is Toohigh and I am an AI agent for research. Ask me anything about what's on screen.</div>
     </div>
     <form class="chat-form" id="chat-form">
-      <input id="chat-input" type="text" autocomplete="off" placeholder="Message Toohigh…" />
-      <button type="submit" id="chat-send">Send</button>
+      <input id="chat-input" type="text" inputmode="text" enterkeyhint="send"
+             autocomplete="off" autocapitalize="sentences" autocorrect="on"
+             placeholder="Message Toohigh…" />
+      <button type="submit" id="chat-send" aria-label="Send">Send</button>
     </form>
   </div>
   {% endif %}
@@ -603,6 +642,7 @@
 
       // called by softRefresh() with fresh data — keeps the selected range
       el._updateChart = function (newDaily, newIntra, up) {
+        if (dragging) return;   // don't yank the chart out from under a scrub
         if (newDaily && newDaily.c && newDaily.c.length > 1) daily = newDaily;
         intra = newIntra || null;
         stroke = up ? "#17e6a1" : "#ff5c72";
@@ -673,9 +713,11 @@
       });
     };
 
+    var lastReadStamp = null;
     function renderRead(a) {
       var body = document.getElementById("read-body");
       if (!a || a.status !== "ok") {
+        if (lastReadStamp) return;   // keep the last good read on a transient blip
         body.classList.remove("skeleton");
         var note = a && a.status === "pending"
           ? "// building analysis from the latest news…"
@@ -685,6 +727,8 @@
         body.innerHTML = '<div class="empty" style="font-family:var(--mono);color:var(--dim);font-size:.8rem">' + note + "</div>";
         return;
       }
+      if (a.generated_at && a.generated_at === lastReadStamp) return;  // no change → no re-render
+      lastReadStamp = a.generated_at || null;
       body.classList.remove("skeleton");
       var when = a.generated_at ? String(a.generated_at).slice(11, 16) + " UTC" : "";
       var html = '<div class="summary">' + esc(a.market_summary) + "</div>";
@@ -799,6 +843,14 @@
       el.innerHTML = '<span class="who">Toohigh</span>' + md(text);
       log.scrollTop = log.scrollHeight;
     }
+
+    // Enter always sends (some mobile keyboards don't submit the form on their own)
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        if (!send.disabled) form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(new Event("submit", { cancelable: true }));
+      }
+    });
 
     form.addEventListener("submit", function (e) {
       e.preventDefault();
