@@ -99,29 +99,25 @@ def get_analysis_state():
         return ("pending" if _analysis["generating"] else "unavailable"), None
 
 
-def _sparkline(history, n=30, w=100, h=28, pad=2):
-    try:
-        closes = [float(c) for c in history["Close"].tail(n).tolist()]
-    except Exception:
-        return None
-    if len(closes) < 2:
-        return None
-    lo, hi = min(closes), max(closes)
-    span = (hi - lo) or 1.0
-    step = w / (len(closes) - 1)
-    pts = []
-    for i, c in enumerate(closes):
-        x = i * step
-        y = pad + (h - 2 * pad) * (1 - (c - lo) / span)
-        pts.append(f"{x:.1f},{y:.1f}")
-    return " ".join(pts)
-
-
 def _range_position(p):
     lo, hi, last = p.get("52w_low"), p.get("52w_high"), p.get("latest_close")
     if None in (lo, hi, last) or hi == lo:
         return None
     return max(0.0, min(100.0, (last - lo) / (hi - lo) * 100))
+
+
+def _series(history, cap=260):
+    """Full daily close series for the interactive chart: {"t": [...], "c": [...]}."""
+    try:
+        closes = [round(float(c), 2) for c in history["Close"].tolist()]
+        dates = [d.strftime("%Y-%m-%d") for d in history.index]
+    except Exception:
+        return None
+    if len(closes) < 2:
+        return None
+    if len(closes) > cap:                       # keep the payload small
+        closes, dates = closes[-cap:], dates[-cap:]
+    return {"t": dates, "c": closes}
 
 
 def build_views(data):
@@ -133,9 +129,9 @@ def build_views(data):
                 "ticker": ticker,
                 "price": p,
                 "news": d["news"],
-                "spark": _sparkline(p.get("history")),
                 "spark_up": (p.get("pct_change_1d") or 0) >= 0,
                 "range_pos": _range_position(p),
+                "series": _series(p.get("history")),
             }
         )
     return views

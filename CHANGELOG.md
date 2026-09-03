@@ -7,6 +7,20 @@ This project is pre-1.0; the API and schema may change between entries.
 ## [Unreleased]
 - Phase 2 finish: confidence calibration tracking, per-call usage logging.
 
+## [0.2.2] — 2026-09-03
+
+### Fixed
+- **Chat was completely broken**: the message array was named `history`, which
+  is a read-only global in browsers, so `history.push(...)` threw and the send
+  never fired. Renamed to `convo`.
+
+### Added
+- Interactive price chart per ticker — scrub left/right with mouse or touch to
+  read the close and % change at any point in the window, with 1M / 3M / 6M / 1Y
+  range buttons. Replaces the static sparkline; the 52-week range bar stays.
+  Full daily series (up to ~260 points) is sent inline; no extra request.
+- SVG emoji favicon (was 404ing).
+
 ## [0.2.1] — 2026-09-02
 
 ### Changed
