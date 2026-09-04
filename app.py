@@ -109,15 +109,17 @@ def _range_position(p):
 def _series(history, cap=260):
     """Full daily close series for the interactive chart: {"t": [...], "c": [...]}."""
     try:
-        closes = [round(float(c), 2) for c in history["Close"].tolist()]
-        dates = [d.strftime("%Y-%m-%d") for d in history.index]
+        pairs = [
+            (d.strftime("%Y-%m-%d"), round(float(c), 2))
+            for d, c in zip(history.index, history["Close"].tolist())
+            if c == c  # drop NaN
+        ]
     except Exception:
         return None
-    if len(closes) < 2:
+    if len(pairs) < 2:
         return None
-    if len(closes) > cap:                       # keep the payload small
-        closes, dates = closes[-cap:], dates[-cap:]
-    return {"t": dates, "c": closes}
+    pairs = pairs[-cap:]                        # keep the payload small
+    return {"t": [p[0] for p in pairs], "c": [p[1] for p in pairs]}
 
 
 def build_views(data):
@@ -157,6 +159,20 @@ def index():
     )
 
 
+def _json(payload):
+    """Serialize, turning any stray NaN/Infinity into null so JSON.parse works."""
+    def clean(o):
+        if isinstance(o, float):
+            return o if o == o and o not in (float("inf"), float("-inf")) else None
+        if isinstance(o, dict):
+            return {k: clean(v) for k, v in o.items()}
+        if isinstance(o, (list, tuple)):
+            return [clean(x) for x in o]
+        return o
+    return Response(json.dumps(clean(payload), default=str),
+                    mimetype="application/json")
+
+
 def _analysis_payload():
     status, data = get_analysis_state()
     if status != "ok":
@@ -168,8 +184,7 @@ def _analysis_payload():
 
 @app.route("/api/analysis")
 def api_analysis():
-    return Response(json.dumps(_analysis_payload(), default=str),
-                    mimetype="application/json")
+    return _json(_analysis_payload())
 
 
 @app.route("/api/state")
@@ -191,13 +206,12 @@ def api_state():
             "series": v["series"],
             "intraday": v["intraday"],
         })
-    payload = {
+    return _json({
         "fetched_at": fetched_at.strftime("%Y-%m-%d %H:%M:%S UTC"),
         "next_refresh": int(max(0, SNAPSHOT_TTL - (time.time() - _snap["at"]))),
         "tickers": tickers,
         "analysis": _analysis_payload(),
-    }
-    return Response(json.dumps(payload, default=str), mimetype="application/json")
+    })
 
 
 @app.route("/api/chat", methods=["POST"])

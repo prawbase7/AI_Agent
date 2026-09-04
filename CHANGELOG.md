@@ -8,6 +8,16 @@ This project is pre-1.0; the API and schema may change between entries.
 - Phase 3: historical backtesting harness (+ the deferred confidence-calibration
   tracking and per-call usage logging).
 
+## [0.2.7] — 2026-09-04
+
+### Fixed
+- `$nan` prices and a stuck "building analysis…" card after a transient yfinance
+  glitch (it can return a trailing row with NaN OHLC, e.g. around the day
+  boundary). Now: NaN rows are dropped at the source, price fields fall back to
+  `None` → "—", the chart series skips NaN points, and every JSON endpoint
+  sanitises stray `NaN`/`Infinity` to `null` so `JSON.parse` on the client can't
+  throw (which was what wedged the in-place refresh).
+
 ## [0.2.6] — 2026-09-03
 
 ### Fixed / mobile

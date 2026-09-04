@@ -676,13 +676,17 @@
       (st.tickers || []).forEach(function (t) {
         var card = document.querySelector('.card[data-ticker="' + t.ticker + '"]');
         if (!card) return;
-        if (t.latest_close != null)
-          card.querySelector(".price").textContent = "$" + t.latest_close.toFixed(2);
+        var priceEl = card.querySelector(".price");
+        if (priceEl) priceEl.textContent = isFinite(t.latest_close)
+          ? "$" + t.latest_close.toFixed(2) : "—";
         var delta = card.querySelector(".delta");
-        if (delta && t.pct_change_1d != null) {
+        if (delta && isFinite(t.pct_change_1d)) {
           var upd = t.pct_change_1d >= 0;
           delta.className = "delta " + (upd ? "up" : "down");
           delta.textContent = (upd ? "▲ +" : "▼ ") + t.pct_change_1d + "% · 1D";
+          delta.hidden = false;
+        } else if (delta) {
+          delta.hidden = true;
         }
         var chart = card.querySelector(".chart");
         if (chart && chart._updateChart) chart._updateChart(t.series, t.intraday, t.spark_up);

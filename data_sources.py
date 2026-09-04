@@ -69,6 +69,9 @@ def get_price_data(ticker: str, period: str = "1y"):
     """
     stock = yf.Ticker(ticker)
     history = stock.history(period=period)
+    # yfinance sometimes appends a placeholder row with NaN OHLC for the current
+    # in-progress day (or on a data glitch). Drop those so we never show "$nan".
+    history = history.dropna(subset=["Close"])
 
     if history.empty:
         return {
@@ -86,7 +89,9 @@ def get_price_data(ticker: str, period: str = "1y"):
     latest_close = closes.iloc[-1]
     prev_close = closes.iloc[-2] if len(closes) > 1 else None
     pct_change = (
-        ((latest_close - prev_close) / prev_close * 100) if prev_close else None
+        ((latest_close - prev_close) / prev_close * 100)
+        if prev_close and prev_close == prev_close  # not NaN
+        else None
     )
 
     # 52-week range straight from the last year of prices
@@ -101,12 +106,20 @@ def get_price_data(ticker: str, period: str = "1y"):
         print(f"⚠️  Could not fetch info for {ticker}: {e}")
         info = {}
 
+    def _num(x, ndigits=2):
+        """float(x) rounded, or None if x is missing / NaN / non-finite."""
+        try:
+            f = float(x)
+        except (TypeError, ValueError):
+            return None
+        return round(f, ndigits) if f == f and f not in (float("inf"), float("-inf")) else None
+
     return {
         "ticker": ticker,
-        "latest_close": round(float(latest_close), 2),
-        "pct_change_1d": round(float(pct_change), 2) if pct_change is not None else None,
-        "52w_high": round(float(week52_high), 2),
-        "52w_low": round(float(week52_low), 2),
+        "latest_close": _num(latest_close),
+        "pct_change_1d": _num(pct_change),
+        "52w_high": _num(week52_high),
+        "52w_low": _num(week52_low),
         "market_cap": info.get("marketCap"),
         "sector": info.get("sector"),
         "history": history,  # full dataframe if you need it downstream
@@ -122,6 +135,7 @@ def get_intraday(ticker: str):
     """
     try:
         df = yf.Ticker(ticker).history(period="5d", interval="5m")
+        df = df.dropna(subset=["Close"])
         if df.empty:
             return None
         last_day = df.index[-1].date()
